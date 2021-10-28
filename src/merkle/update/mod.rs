@@ -3,12 +3,11 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use crate::utils::rescue::Hash;
+use crate::TransactionMetadata;
 use log::debug;
 use std::time::Instant;
 use winterfell::{
-    math::{fields::f252::BaseElement, log2},
-    FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
+    math::log2, FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 
 pub mod constants;
@@ -42,15 +41,7 @@ pub fn get_example(num_transactions: usize) -> TransactionExample {
 
 pub struct TransactionExample {
     options: ProofOptions,
-    initial_roots: Vec<Hash>,
-    final_root: Hash,
-    s_old_values: Vec<[BaseElement; 4]>,
-    r_old_values: Vec<[BaseElement; 4]>,
-    s_indices: Vec<usize>,
-    r_indices: Vec<usize>,
-    s_paths: Vec<Vec<Hash>>,
-    r_paths: Vec<Vec<Hash>>,
-    deltas: Vec<BaseElement>,
+    tx_metadata: TransactionMetadata,
 }
 
 impl TransactionExample {
@@ -60,30 +51,11 @@ impl TransactionExample {
             "tree depth must be one less than a power of 2"
         );
         // Create a Merkle tree for which we know all of the values
-        let (
-            initial_roots,
-            final_root,
-            s_old_values,
-            r_old_values,
-            s_indices,
-            r_indices,
-            s_paths,
-            r_paths,
-            deltas,
-            _,
-        ) = crate::build_tree(num_transactions);
+        let tx_metadata = TransactionMetadata::build_random(num_transactions);
 
         TransactionExample {
             options,
-            initial_roots,
-            final_root,
-            s_old_values,
-            r_old_values,
-            s_indices,
-            r_indices,
-            s_paths,
-            r_paths,
-            deltas,
+            tx_metadata,
         }
     }
     pub fn prove(&self) -> StarkProof {
@@ -94,17 +66,7 @@ impl TransactionExample {
             MERKLE_TREE_DEPTH
         );
         let now = Instant::now();
-        let trace = build_trace(
-            &self.initial_roots,
-            &self.s_old_values,
-            &self.r_old_values,
-            &self.s_indices,
-            &self.r_indices,
-            &self.s_paths,
-            &self.r_paths,
-            &self.deltas,
-            self.s_old_values.len(),
-        );
+        let trace = build_trace(&self.tx_metadata);
         let trace_length = trace.length();
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -115,23 +77,23 @@ impl TransactionExample {
 
         // generate the proof
         let pub_inputs = PublicInputs {
-            initial_root: self.initial_roots[0].to_elements(),
-            final_root: self.final_root.to_elements(),
+            initial_root: self.tx_metadata.initial_roots[0].to_elements(),
+            final_root: self.tx_metadata.final_root.to_elements(),
         };
         winterfell::prove::<MerkleAir>(trace, pub_inputs, self.options.clone()).unwrap()
     }
 
     pub fn verify(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
-            initial_root: self.initial_roots[0].to_elements(),
-            final_root: self.final_root.to_elements(),
+            initial_root: self.tx_metadata.initial_roots[0].to_elements(),
+            final_root: self.tx_metadata.final_root.to_elements(),
         };
         winterfell::verify::<MerkleAir>(proof, pub_inputs)
     }
 
     pub fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
-        let initial_root = self.initial_roots[0].to_elements();
-        let final_root = self.final_root.to_elements();
+        let initial_root = self.tx_metadata.initial_roots[0].to_elements();
+        let final_root = self.tx_metadata.final_root.to_elements();
         let pub_inputs = PublicInputs {
             initial_root,
             final_root: [final_root[1], final_root[0]],

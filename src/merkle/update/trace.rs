@@ -5,6 +5,7 @@
 
 use super::constants::*;
 use crate::utils::rescue;
+use crate::TransactionMetadata;
 use winterfell::{
     math::{fields::f252::BaseElement, FieldElement},
     ExecutionTrace,
@@ -17,17 +18,18 @@ use winterfell::iterators::*;
 // ================================================================================================
 
 #[allow(clippy::too_many_arguments)]
-pub fn build_trace(
-    initial_roots: &[rescue::Hash],
-    s_old_values: &[[BaseElement; 4]],
-    r_old_values: &[[BaseElement; 4]],
-    s_indices: &[usize],
-    r_indices: &[usize],
-    s_branches: &[Vec<rescue::Hash>],
-    r_branches: &[Vec<rescue::Hash>],
-    deltas: &[BaseElement],
-    num_transactions: usize,
-) -> ExecutionTrace<BaseElement> {
+pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
+    let initial_roots = &tx_metadata.initial_roots;
+    let s_old_values = &tx_metadata.s_old_values;
+    let r_old_values = &tx_metadata.r_old_values;
+    let s_indices = &tx_metadata.s_indices;
+    let r_indices = &tx_metadata.r_indices;
+    let s_paths = &tx_metadata.s_paths;
+    let r_paths = &tx_metadata.r_paths;
+    let deltas = &tx_metadata.deltas;
+
+    let num_transactions = tx_metadata.initial_roots.len();
+
     // allocate memory to hold the trace table
     let mut trace = ExecutionTrace::new(TRACE_WIDTH, num_transactions * TRANSACTION_CYCLE_LENGTH);
 
@@ -52,8 +54,8 @@ pub fn build_trace(
                         step,
                         s_indices[i],
                         r_indices[i],
-                        s_branches[i].clone(),
-                        r_branches[i].clone(),
+                        s_paths[i].clone(),
+                        r_paths[i].clone(),
                         state,
                     );
                 },
