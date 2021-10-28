@@ -16,6 +16,7 @@ use winterfell::iterators::*;
 // TRACE GENERATOR
 // ================================================================================================
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_trace(
     initial_roots: &[rescue::Hash],
     s_old_values: &[[BaseElement; 4]],
@@ -182,13 +183,6 @@ pub fn update_merkle_update_auth_state(
             state[1] = branch_node[1];
             state[HASH_STATE_WIDTH + 1] = branch_node[0];
             state[HASH_STATE_WIDTH + 2] = branch_node[1];
-        }
-        // reset the capacity registers of the state to ZERO
-        // TODO: Remove if there are no extra registers
-        for index in [0, HASH_STATE_WIDTH + 1] {
-            for offset in 4..HASH_STATE_WIDTH {
-                state[index + offset] = BaseElement::ZERO;
-            }
         }
 
         // Store the index bit in the "middle lane"

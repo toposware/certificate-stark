@@ -74,8 +74,8 @@ impl SchnorrExample {
             let mut message = [BaseElement::ZERO; 6];
             message[0] = pkey.get_x();
             message[1] = pkey.get_y();
-            for i in 2..6 {
-                message[i] = BaseElement::random(&mut rng);
+            for msg in message.iter_mut().skip(2) {
+                *msg = BaseElement::random(&mut rng);
             }
 
             skeys.push(skey);

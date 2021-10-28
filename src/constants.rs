@@ -33,7 +33,7 @@ pub const TRACE_WIDTH: usize = merkle_const::TRACE_WIDTH + 7;
 /// The width of the trace used for Merkle registers
 pub const MERKLE_REGISTER_WIDTH: usize = merkle_const::TRACE_WIDTH;
 /// Beginning position of the copy of the sender's public key
-pub const SENDER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + 0;
+pub const SENDER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH;
 /// Beginning position of the copy of the receiver's public key
 pub const RECEIVER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + 2;
 /// Position of the register copying delta
@@ -62,7 +62,7 @@ pub const SIGMA_RANGE_RES: usize = DELTA_RANGE_RES + 1;
 /// The width of the trace used for Schnorr registers
 pub const SCHNORR_REGISTER_WIDTH: usize = schnorr_const::TRACE_WIDTH;
 /// Position of the bit decomposition of delta
-pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH + 0;
+pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH;
 /// Position of the accumulated value for delta
 pub const DELTA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 1;
 /// Position of the bit decomposition of sigma

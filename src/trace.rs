@@ -32,6 +32,7 @@ use schnorr_const::SIG_CYCLE_LENGTH as SCHNORR_LENGTH;
 // |   merkle::update   | copy_keys_and_sigma |
 // |   schnorr::init    | copy_keys_and_sigma |
 // |   schnorr::verif   |  range_proof_sigma  |
+#[allow(clippy::too_many_arguments)]
 pub fn build_trace(
     initial_roots: &[rescue::Hash],
     s_old_values: &[[BaseElement; 4]],
@@ -138,6 +139,7 @@ pub fn init_transaction_state(
 // TRANSITION FUNCTION
 // ================================================================================================
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_transaction_state(
     step: usize,
     s_index: usize,
@@ -153,25 +155,14 @@ pub fn update_transaction_state(
     pkey_point: [BaseElement; 3],
     state: &mut [BaseElement],
 ) {
-    const MERKLE_INIT_LENGTH: usize = 0;
-    let merkle_init_flag = step < MERKLE_INIT_LENGTH;
-    let merkle_update_flag =
-        !merkle_init_flag && (step - MERKLE_INIT_LENGTH < MERKLE_UPDATE_LENGTH - 1);
-    let schnorr_init_flag = step == MERKLE_INIT_LENGTH + MERKLE_UPDATE_LENGTH - 1;
-    let schnorr_update_flag =
-        !schnorr_init_flag && (step < SCHNORR_LENGTH + MERKLE_INIT_LENGTH + MERKLE_UPDATE_LENGTH);
+    let merkle_update_flag = step < MERKLE_UPDATE_LENGTH - 1;
+    let schnorr_init_flag = step == MERKLE_UPDATE_LENGTH - 1;
+    let schnorr_update_flag = !schnorr_init_flag && (step < SCHNORR_LENGTH + MERKLE_UPDATE_LENGTH);
 
-    if merkle_init_flag {
-        // Compute the leaves hashes
-        merkle::init::update_merkle_initialization_state(
-            step,
-            &mut state[..merkle_init_const::TRACE_WIDTH],
-        );
-    } else if merkle_update_flag {
+    if merkle_update_flag {
         // Proceed to Merkle authentication paths verification
-        let merkle_step = step - MERKLE_INIT_LENGTH;
         merkle::update::update_merkle_update_state(
-            merkle_step,
+            step,
             s_index,
             r_index,
             s_branch,
@@ -190,7 +181,7 @@ pub fn update_transaction_state(
         );
     } else if schnorr_update_flag {
         // Proceed to Schnorr signature verification
-        let schnorr_step = step - MERKLE_INIT_LENGTH - MERKLE_UPDATE_LENGTH;
+        let schnorr_step = step - MERKLE_UPDATE_LENGTH;
         schnorr::update_sig_verification_state(
             schnorr_step,
             message,

@@ -12,7 +12,11 @@ pub use crate::utils::rescue::{
 
 /// Total number of registers in the trace
 pub const TRACE_WIDTH: usize = 4 * HASH_STATE_WIDTH + 4;
+/// The depth to a leaf in the Merkle tree to be used when testing
+#[cfg(test)]
+pub const MERKLE_TREE_DEPTH: usize = 3;
 /// The depth to a leaf in the Merkle tree
+#[cfg(not(test))]
 pub const MERKLE_TREE_DEPTH: usize = 15;
 /// The number of steps required for hashes in a transaction
 pub const TRANSACTION_HASH_LENGTH: usize = HASH_CYCLE_LENGTH * MERKLE_TREE_DEPTH + NUM_HASH_ROUNDS;

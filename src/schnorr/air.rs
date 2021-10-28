@@ -289,6 +289,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],

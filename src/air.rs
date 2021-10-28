@@ -73,14 +73,14 @@ impl Air for TransactionAir {
 
         // Constraint degrees of authentication paths for a Merkle tree update
         let mut update_auth_degrees = Vec::new();
-        // Initial value hash ocnstraints
+        // Initial value hash constraints
         update_auth_degrees.append(&mut hash_constraint_degrees.clone());
         // Bits of index into Merkle tree
         update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
             3,
             vec![TRANSACTION_CYCLE_LENGTH],
         ));
-        // Initial value hash ocnstraints
+        // Initial value hash constraints
         update_auth_degrees.append(&mut hash_constraint_degrees);
 
         // Degrees for all constraints
@@ -340,8 +340,8 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         BaseElement::ZERO,
     );
     let mut input_masks = vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH]; 3];
-    for input_num in 0..3 {
-        input_masks[input_num][(input_num + 1) * HASH_CYCLE_LENGTH - 1] = BaseElement::ONE;
+    for (input_num, mask) in input_masks.iter_mut().enumerate().take(3) {
+        mask[(input_num + 1) * HASH_CYCLE_LENGTH - 1] = BaseElement::ONE;
     }
     stitch(
         &mut columns,
@@ -407,6 +407,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     columns
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],

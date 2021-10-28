@@ -5,7 +5,7 @@
 
 use super::constants::*;
 use crate::utils::rescue::{self, HASH_CYCLE_MASK};
-use crate::utils::{are_equal, is_binary, is_zero, not, EvaluationResult};
+use crate::utils::{are_equal, is_binary, not, EvaluationResult};
 use winterfell::{
     math::{fields::f252::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
@@ -49,14 +49,14 @@ impl Air for MerkleAir {
 
         // Constraint degrees of authentication paths for a Merkle tree update
         let mut update_auth_degrees = Vec::new();
-        // Initial value hash ocnstraints
+        // Initial value hash constraints
         update_auth_degrees.append(&mut hash_constraint_degrees.clone());
         // Bits of index into Merkle tree
         update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
             2,
             vec![TRANSACTION_CYCLE_LENGTH],
         ));
-        // Initial value hash ocnstraints
+        // Initial value hash constraints
         update_auth_degrees.append(&mut hash_constraint_degrees);
 
         // Degrees for all constraints
@@ -226,6 +226,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
@@ -382,15 +383,6 @@ pub fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
             hash_init_flag,
             bit * are_equal(current[reg_index + 1], next[reg_index + 3]),
         );
-
-        // Make sure remaining capacity registers of the hash state are reset to zeros
-        for offset in 4..HASH_STATE_WIDTH {
-            result.agg_constraint(
-                res_index + offset,
-                hash_init_flag,
-                is_zero(next[reg_index + offset]),
-            );
-        }
     }
 
     // Ensure that the same sibling hashes are fed in for proof of update. Must be in whichever

@@ -156,6 +156,8 @@ impl TransactionExample {
 /// - account public key's y coordinate
 /// - account balance
 /// - account nonce
+#[allow(clippy::type_complexity)]
+// TODO: add struct to clean this up
 pub fn build_tree(
     num_transactions: usize,
 ) -> (
