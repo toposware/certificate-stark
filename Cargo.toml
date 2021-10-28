@@ -32,3 +32,12 @@ concurrent = ["winterfell/concurrent", "std"]
 default = ["std", "serialize"]
 std = ["winterfell/std"]
 serialize = ["schnorr-sig/serialize", "stark-curve/serialize"]
+
+[dev-dependencies]
+env_logger = "0.9"
+gumdrop = "0.8"
+
+[profile.release]
+codegen-units = 1
+lto = true
+
