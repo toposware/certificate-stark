@@ -7,7 +7,7 @@ use super::constants::merkle_const::{
     BALANCE_CONSTRAINT_RES, HASH_STATE_WIDTH, NONCE_UPDATE_CONSTRAINT_RES, PREV_TREE_MATCH_RES,
     PREV_TREE_ROOT_POS, PREV_TREE_ROOT_RES, RECEIVER_INITIAL_POS, RECEIVER_UPDATED_POS,
     SENDER_INITIAL_POS, SENDER_UPDATED_POS, TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH,
-    TRANSACTION_HASH_LENGTH, VALUE_CONSTRAINT_RES,
+    VALUE_CONSTRAINT_RES,
 };
 use super::constants::range_const::RANGE_LOG;
 use super::constants::rescue_const::HASH_CYCLE_LENGTH;
@@ -32,7 +32,7 @@ use super::schnorr;
 //use super::schnorr::constants::SCALAR_MUL_LENGTH;
 use super::utils::{
     field::enforce_double_and_add_step,
-    periodic_columns::{fill, pad, stitch},
+    periodic_columns::{pad, stitch},
 };
 use crate::utils::{are_equal, not, EvaluationResult};
 use winterfell::{
@@ -255,7 +255,8 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     let mut columns = vec![Vec::new(); ARK_INDEX + HASH_STATE_WIDTH * 2];
     // Initialize the length of the stitched masks
     let mut length = 0;
-    // Add the columns for the pre-Merkle component
+
+    // Add the common columns for ARK round constants
     let pre_merkle_columns = merkle::init::periodic_columns();
     stitch(
         &mut columns,
@@ -263,67 +264,6 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         (ARK_INDEX..ARK_INDEX + HASH_STATE_WIDTH * 2)
             .enumerate()
             .collect(),
-    );
-    // TODO: Change to make use of modified Merkle init component
-    //length += NUM_HASH_ROUNDS;
-    pad(&mut columns, vec![SETUP_MASK_INDEX], 1, BaseElement::ONE);
-    pad(
-        &mut columns,
-        vec![VALUE_COPY_MASK_INDEX],
-        1,
-        BaseElement::ZERO,
-    );
-    pad(
-        &mut columns,
-        vec![MERKLE_MASK_INDEX, FINISH_MASK_INDEX, HASH_MASK_INDEX],
-        length,
-        BaseElement::ZERO,
-    );
-
-    // Add the columns for the Merkle component
-    let merkle_columns = merkle::update::periodic_columns();
-    stitch(
-        &mut columns,
-        merkle_columns.clone(),
-        vec![(2, HASH_INPUT_MASK_INDEX)],
-    );
-    length = TRANSACTION_HASH_LENGTH;
-    fill(
-        &mut columns,
-        merkle_columns,
-        vec![
-            (1, MERKLE_MASK_INDEX),
-            (3, FINISH_MASK_INDEX),
-            (4, HASH_MASK_INDEX),
-        ],
-        length,
-    );
-    //pad(&mut columns, vec![SETUP_MASK_INDEX], length, BaseElement::ZERO);
-
-    // Pad the columns up to the transition to Schnorr
-    length = MERKLE_UPDATE_LENGTH;
-    pad(
-        &mut columns,
-        vec![
-            SETUP_MASK_INDEX,
-            MERKLE_MASK_INDEX,
-            FINISH_MASK_INDEX,
-            HASH_MASK_INDEX,
-            SCHNORR_MASK_INDEX,
-            SCALAR_MULT_MASK_INDEX,
-            DOUBLING_MASK_INDEX,
-            SCHNORR_HASH_MASK_INDEX,
-            RANGE_PROOF_STEP_MASK_INDEX,
-            RANGE_PROOF_FINISH_MASK_INDEX,
-        ],
-        length,
-        BaseElement::ZERO,
-    );
-    pad(
-        &mut columns,
-        vec![VALUE_COPY_MASK_INDEX],
-        length,
-        BaseElement::ONE,
     );
 
     // Add the columns for the Schnorr component
@@ -342,12 +282,6 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         .collect(),
     );
     // Create a column for the Schnorr setup mask
-    pad(
-        &mut columns,
-        vec![SCHNORR_SETUP_MASK_INDEX],
-        length,
-        BaseElement::ZERO,
-    );
     let mut schnorr_setup_mask = vec![BaseElement::ZERO; SIG_CYCLE_LENGTH];
     schnorr_setup_mask[0] = BaseElement::ONE;
     stitch(
@@ -356,12 +290,6 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         vec![(0, SCHNORR_SETUP_MASK_INDEX)],
     );
     // Create columns for the input copy masks
-    pad(
-        &mut columns,
-        (HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3).collect(),
-        length,
-        BaseElement::ZERO,
-    );
     let mut input_masks = vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH]; 3];
     for (input_num, mask) in input_masks.iter_mut().enumerate().take(3) {
         mask[(input_num + 1) * HASH_CYCLE_LENGTH - 1] = BaseElement::ONE;
@@ -387,13 +315,8 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             .collect(),
     );
 
+    length += SIG_CYCLE_LENGTH - 1;
     // Pad out the copy constraints
-    let hash_input_length = 3 * HASH_CYCLE_LENGTH - 1;
-    length += if hash_input_length > RANGE_LOG {
-        hash_input_length
-    } else {
-        RANGE_LOG
-    };
     pad(
         &mut columns,
         vec![VALUE_COPY_MASK_INDEX],
@@ -401,8 +324,58 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         BaseElement::ONE,
     );
 
+    pad(
+        &mut columns,
+        vec![MERKLE_MASK_INDEX, FINISH_MASK_INDEX, HASH_MASK_INDEX],
+        length,
+        BaseElement::ZERO,
+    );
     // Pad to finish the cycle length
-    length = TRANSACTION_CYCLE_LENGTH;
+    length += 1;
+    pad(
+        &mut columns,
+        vec![
+            SETUP_MASK_INDEX,
+            MERKLE_MASK_INDEX,
+            FINISH_MASK_INDEX,
+            HASH_MASK_INDEX,
+            SCHNORR_SETUP_MASK_INDEX,
+            SCHNORR_MASK_INDEX,
+            SCALAR_MULT_MASK_INDEX,
+            DOUBLING_MASK_INDEX,
+            SCHNORR_HASH_MASK_INDEX,
+            RANGE_PROOF_STEP_MASK_INDEX,
+            RANGE_PROOF_FINISH_MASK_INDEX,
+            VALUE_COPY_MASK_INDEX,
+        ],
+        length,
+        BaseElement::ZERO,
+    );
+    pad(
+        &mut columns,
+        (HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3).collect(),
+        length,
+        BaseElement::ZERO,
+    );
+
+    // Add the columns for the Merkle component
+    let merkle_columns = merkle::update::periodic_columns();
+    stitch(&mut columns, merkle_columns.clone(), vec![]);
+
+    stitch(
+        &mut columns,
+        merkle_columns,
+        vec![
+            (0, SETUP_MASK_INDEX),
+            (1, MERKLE_MASK_INDEX),
+            (2, HASH_INPUT_MASK_INDEX),
+            (3, FINISH_MASK_INDEX),
+            (4, HASH_MASK_INDEX),
+        ],
+    );
+
+    // Pad to finish the cycle length
+    length += MERKLE_UPDATE_LENGTH;
     pad(
         &mut columns,
         vec![
