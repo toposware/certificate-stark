@@ -359,6 +359,9 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         doubling_flag, // Do not repeat it twice
     );
 
+    // Enforce a copy of the field result on "addition" steps
+    result.agg_constraint(2 * POINT_WIDTH + 2, addition_flag, are_equal(next[2 * POINT_WIDTH + 2], current[2 * POINT_WIDTH + 2]));
+
     // When hash_flag = 1, constraints for a Rescue round
     // are enforced on the dedicated registers
     rescue::enforce_round(
@@ -397,7 +400,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result.agg_constraint(
         2 * POINT_WIDTH + 2,
         final_point_addition_flag,
-        are_equal(next[2 * POINT_WIDTH + 2], next[2 * POINT_WIDTH + 3]),
+        are_equal(current[2 * POINT_WIDTH + 2], next[2 * POINT_WIDTH + 3]),
     );
 }
 
