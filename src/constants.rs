@@ -60,6 +60,18 @@ pub const NONCE_COPY_RES: usize = SIGMA_COPY_RES + 1;
 pub const DELTA_RANGE_RES: usize = NONCE_COPY_RES + 1;
 /// Index of constraint for enforcing equality fo accumulated sigma
 pub const SIGMA_RANGE_RES: usize = DELTA_RANGE_RES + 1;
+/// Beginning index of constraints for the first (S) point setup
+pub const S_POINT_SETUP_RES: usize = SIGMA_RANGE_RES + 1;
+/// Beginning index of constraints for the second (h.P) point setup
+pub const HP_POINT_SETUP_RES: usize = S_POINT_SETUP_RES + 3;
+/// Index of constraint for the setup of computation for h in the field
+pub const H_FIELD_SETUP_RES: usize = HP_POINT_SETUP_RES + 3;
+/// Beginning Index of constraints for setting up the schnorr hash input
+pub const SIG_HASH_SETUP_RES: usize = H_FIELD_SETUP_RES + 1;
+/// Index of constraint for setup of first (delta) range proof
+pub const DELTA_SETUP_RES: usize = SIG_HASH_SETUP_RES + 3;
+/// Index of constraint for setup of second (sigma) range proof
+pub const SIGMA_SETUP_RES: usize = DELTA_SETUP_RES + 1;
 /// Index of constraint for enforcing copying of the x component of R
 pub const RX_COPY_RES: usize = schnorr_const::TRACE_WIDTH + 4;
 

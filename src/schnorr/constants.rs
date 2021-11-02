@@ -28,3 +28,13 @@ pub const SCALAR_MUL_LENGTH: usize = 508; // two times 254, as double/add steps 
 pub const TRACE_WIDTH: usize = 2 * POINT_WIDTH + 2 + 1 + STATE_WIDTH;
 /// Total number of steps in the trace for a single signature
 pub const SIG_CYCLE_LENGTH: usize = 512;
+
+//  Indices of the beginning state registers for the main components
+/// Beginning position of the first point (S)
+pub const S_POINT_POS: usize = 0;
+/// Beginning position of the second point (h.P)
+pub const HP_POINT_POS: usize = S_POINT_POS + POINT_WIDTH + 1;
+/// Position of the computation of h in the field
+pub const H_FIELD_POS: usize = HP_POINT_POS + POINT_WIDTH + 1;
+/// Beginning position of the signature hash state
+pub const SIG_HASH_POS: usize = H_FIELD_POS + 1;

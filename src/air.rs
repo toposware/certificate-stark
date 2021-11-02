@@ -11,17 +11,21 @@ use super::constants::merkle_const::{
 };
 use super::constants::range_const::RANGE_LOG;
 use super::constants::rescue_const::HASH_CYCLE_LENGTH;
-use super::constants::schnorr_const::{POINT_WIDTH, SIG_CYCLE_LENGTH};
+use super::constants::schnorr_const::{
+    HP_POINT_POS, H_FIELD_POS, POINT_WIDTH, SIG_CYCLE_LENGTH, SIG_HASH_POS, S_POINT_POS,
+};
 use super::constants::{
     ARK_INDEX, DELTA_ACCUMULATE_POS, DELTA_BIT_POS, DELTA_COPY_POS, DELTA_COPY_RES,
-    DELTA_RANGE_RES, DOUBLING_MASK_INDEX, FINISH_MASK_INDEX, HASH_INPUT_MASK_INDEX,
-    HASH_INTERNAL_INPUT_MASKS_INDEX, HASH_MASK_INDEX, MERKLE_MASK_INDEX, NONCE_COPY_POS,
-    NONCE_COPY_RES, RANGE_PROOF_FINISH_MASK_INDEX, RANGE_PROOF_STEP_MASK_INDEX,
-    RECEIVER_KEY_POINT_POS, RECEIVER_KEY_POINT_RES, RX_COPY_POS, RX_COPY_RES,
-    SCALAR_MULT_MASK_INDEX, SCHNORR_HASH_MASK_INDEX, SCHNORR_HASH_POS, SCHNORR_MASK_INDEX,
-    SCHNORR_REGISTER_WIDTH, SCHNORR_SETUP_MASK_INDEX, SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES,
-    SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES,
-    SIGMA_RANGE_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
+    DELTA_RANGE_RES, DELTA_SETUP_RES, DOUBLING_MASK_INDEX, FINISH_MASK_INDEX,
+    HASH_INPUT_MASK_INDEX, HASH_INTERNAL_INPUT_MASKS_INDEX, HASH_MASK_INDEX, HP_POINT_SETUP_RES,
+    H_FIELD_SETUP_RES, MERKLE_MASK_INDEX, NONCE_COPY_POS, NONCE_COPY_RES,
+    RANGE_PROOF_FINISH_MASK_INDEX, RANGE_PROOF_STEP_MASK_INDEX, RECEIVER_KEY_POINT_POS,
+    RECEIVER_KEY_POINT_RES, RX_COPY_POS, RX_COPY_RES, SCALAR_MULT_MASK_INDEX,
+    SCHNORR_HASH_MASK_INDEX, SCHNORR_HASH_POS, SCHNORR_MASK_INDEX, SCHNORR_REGISTER_WIDTH,
+    SCHNORR_SETUP_MASK_INDEX, SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES, SETUP_MASK_INDEX,
+    SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES, SIGMA_RANGE_RES,
+    SIGMA_SETUP_RES, SIG_HASH_SETUP_RES, S_POINT_SETUP_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH,
+    VALUE_COPY_MASK_INDEX,
 };
 use super::merkle;
 use super::schnorr;
@@ -147,13 +151,13 @@ impl Air for TransactionAir {
             degrees[index + POINT_WIDTH + 1] = schnorr_degrees[index + POINT_WIDTH + 1].clone();
         }
 
-        // Append the degrees for the copy columns followed by range proof equalities
+        // Append the degrees for the copy columns followed by range proof equalities and Schnorr setup results
         degrees.append(&mut vec![
             TransitionConstraintDegree::with_cycles(
                 1,
                 vec![TRANSACTION_CYCLE_LENGTH]
             );
-            SIGMA_RANGE_RES - SENDER_KEY_POINT_RES + 1
+            SIGMA_SETUP_RES - SENDER_KEY_POINT_RES + 1
         ]);
 
         assert_eq!(TRACE_WIDTH, trace_info.width());
@@ -593,6 +597,33 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     hash_internal_inputs[1] += hash_internal_input_flags[2] * next[NONCE_COPY_POS];
 
     // Enforce proper setup of the inouts for the Schnorr component
+    // Enforce that the first and second points start at infinity
+    for (point_setup_res, point_pos) in [
+        (S_POINT_SETUP_RES, S_POINT_POS),
+        (HP_POINT_SETUP_RES, HP_POINT_POS),
+    ] {
+        for (offset, coordinate) in vec![E::ZERO, E::ONE, E::ZERO].into_iter().enumerate() {
+            result.agg_constraint(
+                point_setup_res + offset,
+                schnorr_setup_flag,
+                are_equal(current[point_pos + offset], coordinate),
+            );
+        }
+    }
+    // Enforce that the vomputation of h in the field starts with 0
+    result.agg_constraint(
+        H_FIELD_SETUP_RES,
+        schnorr_setup_flag,
+        are_equal(current[H_FIELD_POS], E::ZERO),
+    );
+    // Enforce that all but the first hash state register are initialized with zeros
+    for offset in 1..HASH_STATE_WIDTH {
+        result.agg_constraint(
+            SIG_HASH_SETUP_RES + offset - 1,
+            schnorr_setup_flag,
+            are_equal(current[SIG_HASH_POS + offset], E::ZERO),
+        );
+    }
     // Enforce copying of the purported x component of R into its copy position
     result.agg_constraint(
         RX_COPY_RES,
@@ -621,6 +652,17 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         are_equal(next[RX_COPY_POS], current[RX_COPY_POS]),
     );
 
+    // Enforce proper setup of the range proofs
+    result.agg_constraint(
+        DELTA_SETUP_RES,
+        schnorr_setup_flag,
+        are_equal(current[DELTA_ACCUMULATE_POS], E::ZERO),
+    );
+    result.agg_constraint(
+        SIGMA_SETUP_RES,
+        schnorr_setup_flag,
+        are_equal(current[SIGMA_ACCUMULATE_POS], E::ZERO),
+    );
     // Enforce constraints for the range proofs
     enforce_double_and_add_step(
         result,
