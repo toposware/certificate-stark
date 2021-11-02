@@ -17,10 +17,11 @@ use super::constants::{
     DELTA_RANGE_RES, DOUBLING_MASK_INDEX, FINISH_MASK_INDEX, HASH_INPUT_MASK_INDEX,
     HASH_INTERNAL_INPUT_MASKS_INDEX, HASH_MASK_INDEX, MERKLE_MASK_INDEX, NONCE_COPY_POS,
     NONCE_COPY_RES, RANGE_PROOF_FINISH_MASK_INDEX, RANGE_PROOF_STEP_MASK_INDEX,
-    RECEIVER_KEY_POINT_POS, RECEIVER_KEY_POINT_RES, SCALAR_MULT_MASK_INDEX,
-    SCHNORR_HASH_MASK_INDEX, SCHNORR_MASK_INDEX, SCHNORR_REGISTER_WIDTH, SENDER_KEY_POINT_POS,
-    SENDER_KEY_POINT_RES, SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS,
-    SIGMA_COPY_RES, SIGMA_RANGE_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
+    RECEIVER_KEY_POINT_POS, RECEIVER_KEY_POINT_RES, RX_COPY_POS, RX_COPY_RES,
+    SCALAR_MULT_MASK_INDEX, SCHNORR_HASH_MASK_INDEX, SCHNORR_HASH_POS, SCHNORR_MASK_INDEX,
+    SCHNORR_REGISTER_WIDTH, SCHNORR_SETUP_MASK_INDEX, SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES,
+    SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES,
+    SIGMA_RANGE_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
 };
 use super::merkle;
 use super::schnorr;
@@ -185,6 +186,7 @@ impl Air for TransactionAir {
         let transaction_finish_flag = periodic_values[FINISH_MASK_INDEX];
         let hash_flag = periodic_values[HASH_MASK_INDEX];
         // Split periodic values for Schnorr component
+        let schnorr_setup_flag = periodic_values[SCHNORR_SETUP_MASK_INDEX];
         let schnorr_mask = periodic_values[SCHNORR_MASK_INDEX];
         let scalar_mult_flag = periodic_values[SCALAR_MULT_MASK_INDEX];
         let doubling_flag = periodic_values[DOUBLING_MASK_INDEX];
@@ -200,6 +202,7 @@ impl Air for TransactionAir {
         let copy_hash_flag = not(schnorr_hash_flag) * schnorr_mask;
         let final_point_addition_flag = not(scalar_mult_flag) * schnorr_mask;
         let addition_flag = not(doubling_flag) * scalar_mult_flag;
+        let copy_rx_flag = not(schnorr_setup_flag + final_point_addition_flag) * schnorr_mask;
 
         evaluate_constraints(
             result,
@@ -211,11 +214,13 @@ impl Air for TransactionAir {
             hash_input_flag,
             hash_flag,
             transaction_finish_flag,
+            schnorr_setup_flag,
             doubling_flag,
             addition_flag,
             final_point_addition_flag,
             copy_hash_flag,
             hash_internal_input_flags,
+            copy_rx_flag,
             range_proof_flag,
             range_proof_finish_flag,
             copy_values_flag,
@@ -332,6 +337,20 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         .enumerate()
         .collect(),
     );
+    // Create a column for the Schnorr setup mask
+    pad(
+        &mut columns,
+        vec![SCHNORR_SETUP_MASK_INDEX],
+        length,
+        BaseElement::ZERO,
+    );
+    let mut schnorr_setup_mask = vec![BaseElement::ZERO; SIG_CYCLE_LENGTH];
+    schnorr_setup_mask[0] = BaseElement::ONE;
+    stitch(
+        &mut columns,
+        vec![schnorr_setup_mask],
+        vec![(0, SCHNORR_SETUP_MASK_INDEX)],
+    );
     // Create columns for the input copy masks
     pad(
         &mut columns,
@@ -387,6 +406,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             MERKLE_MASK_INDEX,
             FINISH_MASK_INDEX,
             HASH_MASK_INDEX,
+            SCHNORR_SETUP_MASK_INDEX,
             SCHNORR_MASK_INDEX,
             SCALAR_MULT_MASK_INDEX,
             DOUBLING_MASK_INDEX,
@@ -418,11 +438,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     hash_input_flag: E,
     hash_flag: E,
     transaction_finish_flag: E,
+    schnorr_setup_flag: E,
     doubling_flag: E,
     addition_flag: E,
     final_point_addition_flag: E,
     copy_hash_flag: E,
     hash_internal_input_flags: &[E],
+    copy_rx_flag: E,
     range_proof_flag: E,
     range_proof_finish_flag: E,
     copy_values_flag: E,
@@ -570,6 +592,14 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     hash_internal_inputs[0] += hash_internal_input_flags[2] * next[DELTA_COPY_POS];
     hash_internal_inputs[1] += hash_internal_input_flags[2] * next[NONCE_COPY_POS];
 
+    // Enforce proper setup of the inouts for the Schnorr component
+    // Enforce copying of the purported x component of R into its copy position
+    result.agg_constraint(
+        RX_COPY_RES,
+        schnorr_setup_flag,
+        are_equal(next[RX_COPY_POS], current[SCHNORR_HASH_POS]),
+    );
+
     schnorr::evaluate_constraints(
         &mut result[0..SCHNORR_REGISTER_WIDTH],
         &current[0..SCHNORR_REGISTER_WIDTH],
@@ -582,6 +612,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         hash_flag,
         copy_hash_flag,
         &hash_internal_inputs,
+    );
+
+    // Enforce proper copying of the x component of R "around" the hash/range proof component
+    result.agg_constraint(
+        RX_COPY_RES,
+        copy_rx_flag,
+        are_equal(next[RX_COPY_POS], current[RX_COPY_POS]),
     );
 
     // Enforce constraints for the range proofs
@@ -611,5 +648,11 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         SIGMA_RANGE_RES,
         range_proof_finish_flag,
         are_equal(next[DELTA_ACCUMULATE_POS], next[DELTA_COPY_POS]),
+    );
+    // Enforce that the purported x component of T matches the computed one
+    result.agg_constraint(
+        RX_COPY_RES,
+        final_point_addition_flag,
+        are_equal(next[0], current[RX_COPY_POS]),
     );
 }

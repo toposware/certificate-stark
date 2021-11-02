@@ -360,7 +360,11 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
 
     // Enforce a copy of the field result on "addition" steps
-    result.agg_constraint(2 * POINT_WIDTH + 2, addition_flag, are_equal(next[2 * POINT_WIDTH + 2], current[2 * POINT_WIDTH + 2]));
+    result.agg_constraint(
+        2 * POINT_WIDTH + 2,
+        addition_flag,
+        are_equal(next[2 * POINT_WIDTH + 2], current[2 * POINT_WIDTH + 2]),
+    );
 
     // When hash_flag = 1, constraints for a Rescue round
     // are enforced on the dedicated registers

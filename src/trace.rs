@@ -181,6 +181,7 @@ pub fn update_transaction_state(
         range::init_range_verification_state(
             &mut state[start_range_index + 2..start_range_index + 4],
         );
+        state[RX_COPY_POS] = signature.0;
     } else if schnorr_update_flag {
         // Proceed to Schnorr signature verification
         let schnorr_step = step - MERKLE_UPDATE_LENGTH;

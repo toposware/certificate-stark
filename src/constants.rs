@@ -42,6 +42,8 @@ pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 4;
 pub const SIGMA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 5;
 /// Position of the register copying the sender's updated nonce
 pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 6;
+/// Position of the register copying the x component of R
+pub const RX_COPY_POS: usize = schnorr_const::TRACE_WIDTH + 4;
 
 //  Indices for the constraint results for various components
 /// Beginning index of constraints for the copy of the sender's public key
@@ -58,9 +60,13 @@ pub const NONCE_COPY_RES: usize = SIGMA_COPY_RES + 1;
 pub const DELTA_RANGE_RES: usize = NONCE_COPY_RES + 1;
 /// Index of constraint for enforcing equality fo accumulated sigma
 pub const SIGMA_RANGE_RES: usize = DELTA_RANGE_RES + 1;
+/// Index of constraint for enforcing copying of the x component of R
+pub const RX_COPY_RES: usize = schnorr_const::TRACE_WIDTH + 4;
 
 /// The width of the trace used for Schnorr registers
 pub const SCHNORR_REGISTER_WIDTH: usize = schnorr_const::TRACE_WIDTH;
+/// Poaition of the beginning of the hash state for Schnorr signature
+pub const SCHNORR_HASH_POS: usize = 2 * schnorr_const::POINT_WIDTH + 3;
 /// Position of the bit decomposition of delta
 pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH;
 /// Position of the accumulated value for delta
@@ -101,5 +107,7 @@ pub const RANGE_PROOF_STEP_MASK_INDEX: usize = 12;
 pub const RANGE_PROOF_FINISH_MASK_INDEX: usize = 13;
 /// The index for the mask checking carry-over of values from Merkle to Schnorr
 pub const VALUE_COPY_MASK_INDEX: usize = 14;
+/// The index for the mask enforcing proper setup of the Schnorr component
+pub const SCHNORR_SETUP_MASK_INDEX: usize = 15;
 /// The starting index for the Rescue round constants
-pub const ARK_INDEX: usize = 15;
+pub const ARK_INDEX: usize = 16;
