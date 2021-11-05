@@ -190,14 +190,14 @@ impl TransactionMetadata {
         let now = Instant::now();
 
         let mut rng = OsRng;
-        let num_values = usize::pow(2, MERKLE_TREE_DEPTH as u32);
+        let tree_size = usize::pow(2, MERKLE_TREE_DEPTH as u32);
         // Ensure values are of appropriate size
         // TODO: Change this and the size bound on delta if RANGE_LOG changes
-        let mut value_elements = Vec::with_capacity(num_values * 2);
-        let mut secret_keys = Vec::with_capacity(num_values);
-        let mut values = Vec::with_capacity(num_values);
-        let mut leaves = Vec::with_capacity(num_values);
-        for i in 0..num_values {
+        let mut value_elements = Vec::with_capacity(tree_size * 2);
+        let mut secret_keys = Vec::with_capacity(tree_size);
+        let mut values = Vec::with_capacity(tree_size);
+        let mut leaves = Vec::with_capacity(tree_size);
+        for i in 0..tree_size {
             value_elements.push(rng.next_u64());
             value_elements.push(rng.next_u64());
             let skey = Scalar::random(&mut rng);
@@ -233,16 +233,21 @@ impl TransactionMetadata {
         // Repeat basic process for every transaction
         for transaction_num in 0..num_transactions {
             // Get random indices and amount to change the accounts by
-            let tree_size = u128::pow(2, MERKLE_TREE_DEPTH as u32) as usize;
-            let s_index = (BaseElement::random(&mut rng).to_repr().0[0] as usize) % tree_size;
+            let s_index = rng.next_u64() as usize % tree_size;
             // Make sure receiver is not the same as sender
-            let r_index = (s_index
-                + 1
-                + ((BaseElement::random(&mut rng).to_repr().0[0] as usize) % (tree_size - 1)))
-                % tree_size as usize;
-            assert_ne!(s_index, r_index);
+            let mut r_index = rng.next_u64() as usize % tree_size;
+            while s_index == r_index {
+                r_index = rng.next_u64() as usize % tree_size;
+            }
 
-            let delta = BaseElement::from(rng.next_u64() % values[s_index][2].to_repr().0[0]);
+            // ensure that delta is small enough to not overflow the receiver's balance
+            // or underflow the sender's balance and make the AIR program fail
+            let delta_value = rng.next_u64()
+                % core::cmp::min(
+                    values[s_index][2].to_repr().0[0],
+                    u64::MAX - values[r_index][2].to_repr().0[0],
+                );
+            let delta = BaseElement::from(delta_value);
 
             // Store the old values, indices, and delta
             initial_roots.push(*tree.root());
