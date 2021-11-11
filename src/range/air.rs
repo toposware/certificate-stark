@@ -6,7 +6,7 @@
 use super::field;
 use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::cheetah::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ExecutionTrace, ProofOptions,
     Serializable, TraceInfo, TransitionConstraintDegree,
 };

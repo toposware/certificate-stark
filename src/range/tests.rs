@@ -4,7 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::cheetah::BaseElement, FieldElement},
     FieldExtension, HashFunction, ProofOptions,
 };
 
