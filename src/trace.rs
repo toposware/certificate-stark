@@ -11,7 +11,7 @@ use super::utils::rescue;
 use super::TransactionMetadata;
 use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
 use winterfell::{
-    math::{curve::Scalar, fields::f252::BaseElement},
+    math::{curve::Scalar, fields::cheetah::BaseElement},
     ExecutionTrace,
 };
 
@@ -58,17 +58,15 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
             let delta_bytes = deltas[i].to_bytes();
             let delta_bits = delta_bytes.as_bits::<Lsb0>();
 
-            let sigma_bytes = (s_old_values[i][2] - deltas[i]).to_bytes();
+            let sigma_bytes = (s_old_values[i][12] - deltas[i]).to_bytes();
             let sigma_bits = sigma_bytes.as_bits::<Lsb0>();
 
-            let message = [
-                s_old_values[i][0],
-                s_old_values[i][1],
-                r_old_values[i][0],
-                r_old_values[i][1],
+            let message = super::build_tx_message(
+                &s_old_values[i][0..12],
+                &r_old_values[i][0..12],
                 deltas[i],
-                s_old_values[i][3],
-            ];
+                s_old_values[i][13],
+            );
 
             let (pkey_point, sig_bytes, sig_hash_bytes) =
                 schnorr::build_sig_info(&message, &signatures[i]);
@@ -113,8 +111,8 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
 
 pub fn init_transaction_state(
     initial_root: rescue::Hash,
-    s_old_value: [BaseElement; 4],
-    r_old_value: [BaseElement; 4],
+    s_old_value: [BaseElement; 14],
+    r_old_value: [BaseElement; 14],
     delta: BaseElement,
     state: &mut [BaseElement],
 ) {
@@ -129,13 +127,11 @@ pub fn init_transaction_state(
 
     // Copy public keys and sigma = balance_sender - delta
     let start_copy_index = merkle_const::TRACE_WIDTH;
-    state[start_copy_index] = s_old_value[0];
-    state[start_copy_index + 1] = s_old_value[1];
-    state[start_copy_index + 2] = r_old_value[0];
-    state[start_copy_index + 3] = r_old_value[1];
-    state[start_copy_index + 4] = delta;
-    state[start_copy_index + 5] = s_old_value[2] - delta;
-    state[start_copy_index + 6] = s_old_value[3];
+    state[start_copy_index..start_copy_index + 12].copy_from_slice(&s_old_value[0..12]);
+    state[start_copy_index + 12..start_copy_index + 24].copy_from_slice(&r_old_value[0..12]);
+    state[start_copy_index + 24] = delta;
+    state[start_copy_index + 25] = s_old_value[12] - delta;
+    state[start_copy_index + 26] = s_old_value[13];
 }
 
 // TRANSITION FUNCTION
@@ -150,11 +146,11 @@ pub fn update_transaction_state(
     r_branch: Vec<rescue::Hash>,
     delta_bits: &BitSlice<Lsb0, u8>,
     sigma_bits: &BitSlice<Lsb0, u8>,
-    signature: (BaseElement, Scalar),
+    signature: ([BaseElement; 6], Scalar),
     sig_bits: &BitSlice<Lsb0, u8>,
     sig_hash_bits: &BitSlice<Lsb0, u8>,
-    message: [BaseElement; 6],
-    pkey_point: [BaseElement; 3],
+    message: [BaseElement; 28],
+    pkey_point: [BaseElement; 18],
     state: &mut [BaseElement],
 ) {
     let merkle_update_flag = step < MERKLE_UPDATE_LENGTH - 1;

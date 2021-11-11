@@ -4,10 +4,11 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::constants::merkle_const::{
-    BALANCE_CONSTRAINT_RES, HASH_STATE_WIDTH, NONCE_UPDATE_CONSTRAINT_RES, PREV_TREE_MATCH_RES,
-    PREV_TREE_ROOT_POS, PREV_TREE_ROOT_RES, RECEIVER_INITIAL_POS, RECEIVER_UPDATED_POS,
-    SENDER_INITIAL_POS, SENDER_UPDATED_POS, TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH,
-    TRANSACTION_HASH_LENGTH, VALUE_CONSTRAINT_RES,
+    BALANCE_CONSTRAINT_RES, HASH_RATE_WIDTH, HASH_STATE_WIDTH, NONCE_UPDATE_CONSTRAINT_RES,
+    PREV_TREE_MATCH_RES, PREV_TREE_ROOT_POS, PREV_TREE_ROOT_RES, RECEIVER_INITIAL_POS,
+    RECEIVER_UPDATED_POS, SENDER_INITIAL_POS, SENDER_UPDATED_POS,
+    TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH, TRANSACTION_HASH_LENGTH,
+    VALUE_CONSTRAINT_RES,
 };
 use super::constants::range_const::RANGE_LOG;
 use super::constants::rescue_const::HASH_CYCLE_LENGTH;
@@ -31,7 +32,7 @@ use super::utils::{
 };
 use crate::utils::{are_equal, not, EvaluationResult};
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::cheetah::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
@@ -40,8 +41,8 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub initial_root: [BaseElement; 2],
-    pub final_root: [BaseElement; 2],
+    pub initial_root: [BaseElement; 7],
+    pub final_root: [BaseElement; 7],
 }
 
 impl Serializable for PublicInputs {
@@ -53,8 +54,8 @@ impl Serializable for PublicInputs {
 
 pub struct TransactionAir {
     context: AirContext<BaseElement>,
-    initial_root: [BaseElement; 2],
-    final_root: [BaseElement; 2],
+    initial_root: [BaseElement; 7],
+    final_root: [BaseElement; 7],
 }
 
 impl Air for TransactionAir {
@@ -92,18 +93,74 @@ impl Air for TransactionAir {
         let mut remaining_degrees =
             vec![
                 TransitionConstraintDegree::with_cycles(1, vec![TRANSACTION_CYCLE_LENGTH]);
-                PREV_TREE_MATCH_RES + 2 - PREV_TREE_ROOT_RES
+                PREV_TREE_MATCH_RES + HASH_RATE_WIDTH - PREV_TREE_ROOT_RES
             ];
         degrees.append(&mut remaining_degrees);
-        let bit_degree = 5; //if NUM_TRANSACTIONS == 1 {
-                            //     3
-                            // } else {
-                            //     5
-                            // };
+        let bit_degree = 5;
         let schnorr_degrees = vec![
             // First scalar multiplication
             TransitionConstraintDegree::with_cycles(
                 5,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                5,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                5,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                5,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                5,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                5,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                4,
                 vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
             ),
             TransitionConstraintDegree::with_cycles(
@@ -128,12 +185,82 @@ impl Air for TransactionAir {
                 bit_degree,
                 vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
             ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
             TransitionConstraintDegree::with_cycles(2, vec![TRANSACTION_CYCLE_LENGTH]),
             // Rescue hash
             TransitionConstraintDegree::with_cycles(
                 1,
                 vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
             ),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
@@ -184,13 +311,15 @@ impl Air for TransactionAir {
         let hash_input_flag = periodic_values[HASH_INPUT_MASK_INDEX];
         let transaction_finish_flag = periodic_values[FINISH_MASK_INDEX];
         let hash_flag = periodic_values[HASH_MASK_INDEX];
+
         // Split periodic values for Schnorr component
         let schnorr_mask = periodic_values[SCHNORR_MASK_INDEX];
         let scalar_mult_flag = periodic_values[SCALAR_MULT_MASK_INDEX];
         let doubling_flag = periodic_values[DOUBLING_MASK_INDEX];
         let schnorr_hash_flag = periodic_values[SCHNORR_HASH_MASK_INDEX];
         let hash_internal_input_flags =
-            &periodic_values[HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3];
+            &periodic_values[HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX];
+
         let range_proof_flag = periodic_values[RANGE_PROOF_STEP_MASK_INDEX];
         let range_proof_finish_flag = periodic_values[RANGE_PROOF_FINISH_MASK_INDEX];
         let copy_values_flag = periodic_values[VALUE_COPY_MASK_INDEX];
@@ -214,6 +343,7 @@ impl Air for TransactionAir {
             doubling_flag,
             addition_flag,
             final_point_addition_flag,
+            schnorr_hash_flag,
             copy_hash_flag,
             hash_internal_input_flags,
             range_proof_flag,
@@ -289,7 +419,6 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         ],
         length,
     );
-    //pad(&mut columns, vec![SETUP_MASK_INDEX], length, BaseElement::ZERO);
 
     // Pad the columns up to the transition to Schnorr
     length = MERKLE_UPDATE_LENGTH;
@@ -335,18 +464,25 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     // Create columns for the input copy masks
     pad(
         &mut columns,
-        (HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3).collect(),
+        (HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX).collect(),
         length,
         BaseElement::ZERO,
     );
-    let mut input_masks = vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH]; 3];
-    for (input_num, mask) in input_masks.iter_mut().enumerate().take(3) {
+    let mut input_masks = vec![
+        vec![BaseElement::ZERO; SIG_CYCLE_LENGTH];
+        RANGE_PROOF_STEP_MASK_INDEX - HASH_INTERNAL_INPUT_MASKS_INDEX
+    ];
+    for (input_num, mask) in input_masks
+        .iter_mut()
+        .enumerate()
+        .take(RANGE_PROOF_STEP_MASK_INDEX - HASH_INTERNAL_INPUT_MASKS_INDEX)
+    {
         mask[(input_num + 1) * HASH_CYCLE_LENGTH - 1] = BaseElement::ONE;
     }
     stitch(
         &mut columns,
         input_masks,
-        (HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3)
+        (HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX)
             .enumerate()
             .collect(),
     );
@@ -421,6 +557,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     doubling_flag: E,
     addition_flag: E,
     final_point_addition_flag: E,
+    schnorr_hash_flag: E,
     copy_hash_flag: E,
     hash_internal_input_flags: &[E],
     range_proof_flag: E,
@@ -429,39 +566,32 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
 ) {
     merkle::init::evaluate_constraints(result, current, next, ark, transaction_setup_flag);
     // Enforce no change in registers representing keys
-    result.agg_constraint(
-        VALUE_CONSTRAINT_RES,
-        transaction_setup_flag,
-        are_equal(current[SENDER_INITIAL_POS], current[SENDER_UPDATED_POS]),
-    );
-    result.agg_constraint(
-        VALUE_CONSTRAINT_RES + 1,
-        transaction_setup_flag,
-        are_equal(
-            current[SENDER_INITIAL_POS + 1],
-            current[SENDER_UPDATED_POS + 1],
-        ),
-    );
-    result.agg_constraint(
-        VALUE_CONSTRAINT_RES + 2,
-        transaction_setup_flag,
-        are_equal(current[RECEIVER_INITIAL_POS], current[RECEIVER_UPDATED_POS]),
-    );
-    result.agg_constraint(
-        VALUE_CONSTRAINT_RES + 3,
-        transaction_setup_flag,
-        are_equal(
-            current[RECEIVER_INITIAL_POS + 1],
-            current[RECEIVER_UPDATED_POS + 1],
-        ),
-    );
+    for i in 0..12 {
+        result.agg_constraint(
+            VALUE_CONSTRAINT_RES + i,
+            transaction_setup_flag,
+            are_equal(
+                current[SENDER_INITIAL_POS + i],
+                current[SENDER_UPDATED_POS + i],
+            ),
+        );
+
+        result.agg_constraint(
+            VALUE_CONSTRAINT_RES + 12 + i,
+            transaction_setup_flag,
+            are_equal(
+                current[RECEIVER_INITIAL_POS + i],
+                current[RECEIVER_UPDATED_POS + i],
+            ),
+        );
+    }
     // Enforce no change in the receiver's nonce
     result.agg_constraint(
-        VALUE_CONSTRAINT_RES + 4,
+        VALUE_CONSTRAINT_RES + 24,
         transaction_setup_flag,
         are_equal(
-            current[RECEIVER_INITIAL_POS + 3],
-            current[RECEIVER_UPDATED_POS + 3],
+            current[RECEIVER_INITIAL_POS + 13],
+            current[RECEIVER_UPDATED_POS + 13],
         ),
     );
     // Enforce that the change in balances cancels out
@@ -469,8 +599,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         BALANCE_CONSTRAINT_RES,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_INITIAL_POS + 2] - current[SENDER_UPDATED_POS + 2],
-            current[RECEIVER_UPDATED_POS + 2] - current[RECEIVER_INITIAL_POS + 2],
+            current[SENDER_INITIAL_POS + 12] - current[SENDER_UPDATED_POS + 12],
+            current[RECEIVER_UPDATED_POS + 12] - current[RECEIVER_INITIAL_POS + 12],
         ),
     );
     // Enforce change in the sender's nonce
@@ -478,8 +608,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         NONCE_UPDATE_CONSTRAINT_RES,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_UPDATED_POS + 3],
-            current[SENDER_INITIAL_POS + 3] + E::ONE,
+            current[SENDER_UPDATED_POS + 13],
+            current[SENDER_INITIAL_POS + 13] + E::ONE,
         ),
     );
 
@@ -496,7 +626,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             RECEIVER_KEY_POINT_POS,
         ),
     ] {
-        for offset in 0..2 {
+        for offset in 0..12 {
             result.agg_constraint(
                 res_index + offset,
                 transaction_setup_flag,
@@ -510,13 +640,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         transaction_setup_flag,
         are_equal(
             next[DELTA_COPY_POS],
-            current[SENDER_INITIAL_POS + 2] - current[SENDER_UPDATED_POS + 2],
+            current[SENDER_INITIAL_POS + 12] - current[SENDER_UPDATED_POS + 12],
         ),
     );
     // Enforce proper copying of sigma and the nonce
     for (res_index, origin_index, copy_index) in [
-        (SIGMA_COPY_RES, SENDER_UPDATED_POS + 2, SIGMA_COPY_POS),
-        (NONCE_COPY_RES, SENDER_INITIAL_POS + 3, NONCE_COPY_POS),
+        (SIGMA_COPY_RES, SENDER_UPDATED_POS + 12, SIGMA_COPY_POS),
+        (NONCE_COPY_RES, SENDER_INITIAL_POS + 13, NONCE_COPY_POS),
     ] {
         result.agg_constraint(
             res_index,
@@ -530,7 +660,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         (SENDER_KEY_POINT_RES, SENDER_KEY_POINT_POS),
         (RECEIVER_KEY_POINT_RES, RECEIVER_KEY_POINT_POS),
     ] {
-        for offset in 0..2 {
+        for offset in 0..12 {
             result.agg_constraint(
                 res_index + offset,
                 copy_values_flag,
@@ -562,13 +692,29 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
 
     // Set up the internal inputs
-    let mut hash_internal_inputs = [E::ZERO; 2];
-    for i in 0..2 {
-        hash_internal_inputs[i] += hash_internal_input_flags[0] * next[SENDER_KEY_POINT_POS + i];
-        hash_internal_inputs[i] += hash_internal_input_flags[1] * next[RECEIVER_KEY_POINT_POS + i];
+    let mut hash_internal_inputs = [E::ZERO; HASH_RATE_WIDTH];
+    for k in 0..schnorr::constants::NUM_HASH_ITER - 1 {
+        for i in 0..HASH_RATE_WIDTH {
+            let from_sender = k * HASH_RATE_WIDTH + i < 12;
+            let from_receiver = !from_sender && (k * HASH_RATE_WIDTH + i < 24);
+            let from_delta = k * HASH_RATE_WIDTH + i == 24;
+            let from_nonce = k * HASH_RATE_WIDTH + i == 25;
+
+            let cell = if from_sender {
+                next[SENDER_KEY_POINT_POS + k * HASH_RATE_WIDTH + i]
+            } else if from_receiver {
+                next[RECEIVER_KEY_POINT_POS + k * HASH_RATE_WIDTH + i - 12]
+            } else if from_delta {
+                next[DELTA_COPY_POS]
+            } else if from_nonce {
+                next[NONCE_COPY_POS]
+            } else {
+                E::ZERO
+            };
+
+            hash_internal_inputs[i] += hash_internal_input_flags[k] * cell;
+        }
     }
-    hash_internal_inputs[0] += hash_internal_input_flags[2] * next[DELTA_COPY_POS];
-    hash_internal_inputs[1] += hash_internal_input_flags[2] * next[NONCE_COPY_POS];
 
     schnorr::evaluate_constraints(
         &mut result[0..SCHNORR_REGISTER_WIDTH],
@@ -577,9 +723,9 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         ark,
         doubling_flag,
         addition_flag,
-        &next[SENDER_KEY_POINT_POS..SENDER_KEY_POINT_POS + 2],
+        &next[SENDER_KEY_POINT_POS..SENDER_KEY_POINT_POS + 12],
         final_point_addition_flag,
-        hash_flag,
+        schnorr_hash_flag,
         copy_hash_flag,
         &hash_internal_inputs,
     );
