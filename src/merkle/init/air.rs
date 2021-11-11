@@ -8,7 +8,7 @@ use crate::utils::rescue;
 use super::constants::*;
 
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::cheetah::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
@@ -17,8 +17,8 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub s_inputs: [BaseElement; 4],
-    pub r_inputs: [BaseElement; 4],
+    pub s_inputs: [BaseElement; 14],
+    pub r_inputs: [BaseElement; 14],
     pub delta: BaseElement,
 }
 
@@ -32,8 +32,8 @@ impl Serializable for PublicInputs {
 
 pub struct PreMerkleAir {
     context: AirContext<BaseElement>,
-    s_inputs: [BaseElement; 4],
-    r_inputs: [BaseElement; 4],
+    s_inputs: [BaseElement; 14],
+    r_inputs: [BaseElement; 14],
     delta: BaseElement,
 }
 

@@ -6,7 +6,7 @@
 use log::debug;
 use std::time::Instant;
 use winterfell::{
-    math::{fields::f252::BaseElement, log2, FieldElement},
+    math::{fields::cheetah::BaseElement, log2, FieldElement},
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 
@@ -20,8 +20,9 @@ pub use trace::{
     build_trace, init_merkle_initialization_state, update_merkle_initialization_state,
 };
 
-#[cfg(test)]
-mod tests;
+// TODO: bring back if useful
+// #[cfg(test)]
+// mod tests;
 
 // MERKLE TREE UPDATE EXAMPLE
 // ================================================================================================
@@ -42,16 +43,16 @@ pub fn get_example() -> PreMerkleExample {
 
 pub struct PreMerkleExample {
     options: ProofOptions,
-    s_inputs: [BaseElement; 4],
-    r_inputs: [BaseElement; 4],
+    s_inputs: [BaseElement; 14],
+    r_inputs: [BaseElement; 14],
     delta: BaseElement,
 }
 
 impl PreMerkleExample {
     pub fn new(options: ProofOptions) -> PreMerkleExample {
         // Sender and receiver inputs are 4 BaseElement s, namely: 2 for the pk, 1 for the $, and 1 for the nonce
-        let s_inputs = [BaseElement::ZERO; 4];
-        let r_inputs = [BaseElement::ZERO; 4];
+        let s_inputs = [BaseElement::ZERO; 14];
+        let r_inputs = [BaseElement::ZERO; 14];
         let delta = BaseElement::ONE;
 
         PreMerkleExample {

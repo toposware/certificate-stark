@@ -5,7 +5,7 @@
 
 use super::constants::*;
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::cheetah::BaseElement, FieldElement},
     ExecutionTrace,
 };
 
@@ -15,8 +15,8 @@ use crate::utils::rescue;
 // ------------------------------------------------------------------------------------------------
 
 pub fn build_trace(
-    s_inputs: [BaseElement; 4],
-    r_inputs: [BaseElement; 4],
+    s_inputs: [BaseElement; 14],
+    r_inputs: [BaseElement; 14],
     delta: BaseElement,
 ) -> ExecutionTrace<BaseElement> {
     // allocate memory to hold the trace table
@@ -41,8 +41,8 @@ pub fn build_trace(
 
 pub fn init_merkle_initialization_state(
     state: &mut [BaseElement],
-    s_inputs: [BaseElement; 4],
-    r_inputs: [BaseElement; 4],
+    s_inputs: [BaseElement; 14],
+    r_inputs: [BaseElement; 14],
     delta: BaseElement,
 ) {
     // Sender's initial state in the initial merkle tree.

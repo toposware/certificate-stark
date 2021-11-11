@@ -4,10 +4,10 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::constants::*;
-use crate::utils::rescue;
+use crate::utils::rescue::{self, RATE_WIDTH};
 use crate::TransactionMetadata;
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::cheetah::BaseElement, FieldElement},
     ExecutionTrace,
 };
 
@@ -77,30 +77,29 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
 
 pub fn init_merkle_update_state(
     initial_root: rescue::Hash,
-    s_old_value: [BaseElement; 4],
-    r_old_value: [BaseElement; 4],
+    s_old_value: [BaseElement; 14],
+    r_old_value: [BaseElement; 14],
     delta: BaseElement,
     state: &mut [BaseElement],
 ) {
     // Initialize the first row of any given transaction
     let init_root = initial_root.to_elements();
 
-    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + 4].copy_from_slice(&s_old_value);
+    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + 14].copy_from_slice(&s_old_value);
     state[SENDER_BIT_POS] = BaseElement::ZERO;
-    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + 4].copy_from_slice(&s_old_value);
+    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + 14].copy_from_slice(&s_old_value);
     // Update sender's balance
-    state[SENDER_UPDATED_POS + 2] -= delta;
+    state[SENDER_UPDATED_POS + 12] -= delta;
     // Update sender's nonce
-    state[SENDER_UPDATED_POS + 3] += BaseElement::ONE;
+    state[SENDER_UPDATED_POS + 13] += BaseElement::ONE;
 
-    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + 4].copy_from_slice(&r_old_value);
+    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + 14].copy_from_slice(&r_old_value);
     state[RECEIVER_BIT_POS] = BaseElement::ZERO;
-    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + 4].copy_from_slice(&r_old_value);
+    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + 14].copy_from_slice(&r_old_value);
     // Update receivers's balance
-    state[RECEIVER_UPDATED_POS + 2] += delta;
+    state[RECEIVER_UPDATED_POS + 12] += delta;
 
-    state[PREV_TREE_ROOT_POS] = init_root[0];
-    state[PREV_TREE_ROOT_POS + 1] = init_root[1]
+    state[PREV_TREE_ROOT_POS..PREV_TREE_ROOT_POS + RATE_WIDTH].copy_from_slice(&init_root);
 }
 
 // TRANSITION FUNCTION
@@ -119,8 +118,8 @@ pub fn update_merkle_update_state(
     // For the first NUM_HASH_ROUNDS steps of each cycle, compute a single round of Rescue
     // hash in registers [0..HASH_STATE_WIDTH]. On the final step, insert the next branch node
     // into the trace in the positions defined by the next bit of the leaf index. If the bit
-    // is ZERO, the next node goes into registers [2, 3], if it is ONE, the node goes into
-    // registers [0, 1]. On all steps between these, the vlaues are simply copied.
+    // is ZERO, the next node goes into the rate registers, if it is ONE, the node goes into
+    // the capacity registers. On all steps between these, the values are simply copied.
 
     let transaction_pos = step;
 
@@ -143,8 +142,9 @@ pub fn update_merkle_update_state(
     if transaction_pos == TRANSACTION_HASH_LENGTH - 1 {
         // The hashes for the transaction have completed, so copy
         // the previous root to store until the next cycle
-        state[PREV_TREE_ROOT_POS] = state[RECEIVER_UPDATED_POS];
-        state[PREV_TREE_ROOT_POS + 1] = state[RECEIVER_UPDATED_POS + 1];
+        for i in 0..RATE_WIDTH {
+            state[PREV_TREE_ROOT_POS + i] = state[RECEIVER_UPDATED_POS + i];
+        }
     }
 }
 
@@ -168,23 +168,21 @@ pub fn update_merkle_update_auth_state(
         let branch_node = branch[cycle_num + 1].to_elements();
         let index_bit = BaseElement::from(((index >> cycle_num) & 1) as u128);
         if index_bit == BaseElement::ZERO {
-            // If index bit is zero, new branch node goes into registers [2, 3]; values in
-            // registers [0, 1] (the accumulated hash) remain unchanged
-            state[2] = branch_node[0];
-            state[3] = branch_node[1];
-            state[HASH_STATE_WIDTH + 3] = branch_node[0];
-            state[HASH_STATE_WIDTH + 4] = branch_node[1];
+            // If index bit is zero, new branch node goes into rate registers; values in
+            // capacity registers (the accumulated hash) remain unchanged
+            for i in 0..RATE_WIDTH {
+                state[RATE_WIDTH + i] = branch_node[i];
+                state[HASH_STATE_WIDTH + 1 + RATE_WIDTH + i] = branch_node[i];
+            }
         } else {
-            // If index bit is one, accumulated hash goes into registers [2, 3],
-            // and new branch nodes go into registers [0, 1]
-            state[2] = state[0];
-            state[3] = state[1];
-            state[HASH_STATE_WIDTH + 3] = state[HASH_STATE_WIDTH + 1];
-            state[HASH_STATE_WIDTH + 4] = state[HASH_STATE_WIDTH + 2];
-            state[0] = branch_node[0];
-            state[1] = branch_node[1];
-            state[HASH_STATE_WIDTH + 1] = branch_node[0];
-            state[HASH_STATE_WIDTH + 2] = branch_node[1];
+            // If index bit is one, accumulated hash goes into rate registers,
+            // and new branch nodes go into capacity registers
+            for i in 0..RATE_WIDTH {
+                state[RATE_WIDTH + i] = state[i];
+                state[HASH_STATE_WIDTH + 1 + RATE_WIDTH + i] = state[HASH_STATE_WIDTH + 1 + i];
+                state[i] = branch_node[i];
+                state[HASH_STATE_WIDTH + 1 + i] = branch_node[i];
+            }
         }
 
         // Store the index bit in the "middle lane"

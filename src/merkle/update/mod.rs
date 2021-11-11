@@ -96,7 +96,7 @@ impl TransactionExample {
         let final_root = self.tx_metadata.final_root.to_elements();
         let pub_inputs = PublicInputs {
             initial_root,
-            final_root: [final_root[1], final_root[0]],
+            final_root: [final_root[0]; 7],
         };
         winterfell::verify::<MerkleAir>(proof, pub_inputs)
     }
