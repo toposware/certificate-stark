@@ -11,7 +11,7 @@ use winterfell::{
     crypto::Hasher,
     math::{
         curve::{AffinePoint, Scalar},
-        fields::f252::BaseElement,
+        fields::cheetah::BaseElement,
         log2, FieldElement,
     },
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
@@ -56,8 +56,8 @@ pub fn get_example(num_signatures: usize) -> SchnorrExample {
 
 pub struct SchnorrExample {
     options: ProofOptions,
-    messages: Vec<[BaseElement; 6]>,
-    signatures: Vec<(BaseElement, Scalar)>,
+    messages: Vec<[BaseElement; 28]>,
+    signatures: Vec<([BaseElement; 6], Scalar)>,
 }
 
 impl SchnorrExample {
@@ -71,10 +71,10 @@ impl SchnorrExample {
             let skey = Scalar::random(&mut rng);
             let pkey = AffinePoint::from(AffinePoint::generator() * skey);
 
-            let mut message = [BaseElement::ZERO; 6];
-            message[0] = pkey.get_x();
-            message[1] = pkey.get_y();
-            for msg in message.iter_mut().skip(2) {
+            let mut message = [BaseElement::ZERO; 28];
+            message[0..6].copy_from_slice(&pkey.get_x());
+            message[6..12].copy_from_slice(&pkey.get_y());
+            for msg in message.iter_mut().skip(12) {
                 *msg = BaseElement::random(&mut rng);
             }
 
@@ -114,6 +114,7 @@ impl SchnorrExample {
             signatures,
         }
     }
+
     pub fn prove(&self) -> StarkProof {
         // generate the execution trace
         debug!(
@@ -160,13 +161,16 @@ impl SchnorrExample {
 // ================================================================================================
 
 /// Computes a Schnorr signature
-pub fn sign(message: [BaseElement; 6], skey: Scalar) -> (BaseElement, Scalar) {
+pub fn sign(message: [BaseElement; 28], skey: Scalar) -> ([BaseElement; 6], Scalar) {
     let mut rng = OsRng;
     let r = Scalar::random(&mut rng);
     let r_point = AffinePoint::from(AffinePoint::generator() * r);
 
-    let h = hash_message([r_point.get_x(), BaseElement::ZERO], message);
-    let h_bytes = h[0].to_bytes();
+    let h = hash_message(r_point.get_x(), message);
+    // TODO: getting only one 64-bit word to not have wrong field arithmetic,
+    // but should take 4 at least.
+    let mut h_bytes = [0u8; 32];
+    h_bytes[0..8].copy_from_slice(&h[0].to_bytes());
     let h_bits = h_bytes.as_bits::<Lsb0>();
 
     // Reconstruct a scalar from the binary sequence of h
@@ -177,13 +181,20 @@ pub fn sign(message: [BaseElement; 6], skey: Scalar) -> (BaseElement, Scalar) {
 }
 
 /// Verifies a Schnorr signature
-pub fn verify_signature(message: [BaseElement; 6], signature: (BaseElement, Scalar)) -> bool {
+pub fn verify_signature(message: [BaseElement; 28], signature: ([BaseElement; 6], Scalar)) -> bool {
     let s_point = AffinePoint::generator() * signature.1;
-    let pkey = AffinePoint::from_raw_coordinates([message[0], message[1]]);
+    let mut pkey_coords = [BaseElement::ZERO; 12];
+    for i in 0..12 {
+        pkey_coords[i] = message[i];
+    }
+    let pkey = AffinePoint::from_raw_coordinates(pkey_coords);
     assert!(pkey.is_on_curve());
 
-    let h = hash_message([signature.0, BaseElement::ZERO], message);
-    let h_bytes = h[0].to_bytes();
+    let h = hash_message(signature.0, message);
+    // TODO: getting only one 64-bit word to not have wrong field arithmetic,
+    // but should take 4 at least.
+    let mut h_bytes = [0u8; 32];
+    h_bytes[0..8].copy_from_slice(&h[0].to_bytes());
     let h_bits = h_bytes.as_bits::<Lsb0>();
 
     // Reconstruct a scalar from the binary sequence of h
@@ -196,14 +207,41 @@ pub fn verify_signature(message: [BaseElement; 6], signature: (BaseElement, Scal
     r_point.get_x() == signature.0
 }
 
-fn hash_message(input: [BaseElement; 2], message: [BaseElement; 6]) -> [BaseElement; 2] {
+fn hash_message(input: [BaseElement; 6], message: [BaseElement; 28]) -> [BaseElement; 7] {
     let mut h = Rescue252::digest(&input);
-    let mut message_chunk = rescue::Hash::new(message[0], message[1]);
-
+    let mut message_chunk = rescue::Hash::new(
+        message[0], message[1], message[2], message[3], message[4], message[5], message[6],
+    );
     h = Rescue252::merge(&[h, message_chunk]);
-    message_chunk = rescue::Hash::new(message[2], message[3]);
+    message_chunk = rescue::Hash::new(
+        message[7],
+        message[8],
+        message[9],
+        message[10],
+        message[11],
+        message[12],
+        message[13],
+    );
     h = Rescue252::merge(&[h, message_chunk]);
-    message_chunk = rescue::Hash::new(message[4], message[5]);
+    message_chunk = rescue::Hash::new(
+        message[14],
+        message[15],
+        message[16],
+        message[17],
+        message[18],
+        message[19],
+        message[20],
+    );
+    h = Rescue252::merge(&[h, message_chunk]);
+    message_chunk = rescue::Hash::new(
+        message[21],
+        message[22],
+        message[23],
+        message[24],
+        message[25],
+        message[26],
+        message[27],
+    );
     h = Rescue252::merge(&[h, message_chunk]);
 
     h.to_elements()

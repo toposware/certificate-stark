@@ -5,10 +5,11 @@
 
 use super::super::utils::periodic_columns::stitch;
 use super::constants::*;
+use super::rescue::RATE_WIDTH;
 use super::{ecc, field, rescue};
 use crate::utils::{are_equal, is_zero, not, EvaluationResult};
 use winterfell::{
-    math::{curve::Scalar, fields::f252::BaseElement, FieldElement},
+    math::{curve::Scalar, fields::cheetah::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
@@ -17,15 +18,15 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub messages: Vec<[BaseElement; 6]>,
-    pub signatures: Vec<(BaseElement, Scalar)>,
+    pub messages: Vec<[BaseElement; 28]>,
+    pub signatures: Vec<([BaseElement; 6], Scalar)>,
 }
 
 impl Serializable for PublicInputs {
     fn write_into<W: ByteWriter>(&self, target: &mut W) {
         for i in 0..self.messages.len() {
             Serializable::write_batch_into(&self.messages[i], target);
-            target.write(self.signatures[i].0);
+            Serializable::write_batch_into(&self.signatures[i].0, target);
             target.write(self.signatures[i].1);
         }
     }
@@ -33,8 +34,8 @@ impl Serializable for PublicInputs {
 
 pub struct SchnorrAir {
     context: AirContext<BaseElement>,
-    messages: Vec<[BaseElement; 6]>,
-    signatures: Vec<(BaseElement, Scalar)>,
+    messages: Vec<[BaseElement; 28]>,
+    signatures: Vec<([BaseElement; 6], Scalar)>,
 }
 
 impl Air for SchnorrAir {
@@ -44,6 +45,7 @@ impl Air for SchnorrAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
+        // TODO: clean this up
         let bit_degree = if pub_inputs.signatures.len() == 1 {
             3
         } else {
@@ -52,10 +54,26 @@ impl Air for SchnorrAir {
         let degrees = vec![
             // First scalar multiplication
             TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(2, vec![SIG_CYCLE_LENGTH]),
             // Second scalar multiplication
+            // TODO: Fix this
             TransitionConstraintDegree::with_cycles(
                 bit_degree,
                 vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
@@ -65,16 +83,82 @@ impl Air for SchnorrAir {
                 vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
             ),
             TransitionConstraintDegree::with_cycles(
-                if pub_inputs.signatures.len() == 1 {
-                    3
-                } else {
-                    5
-                },
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                bit_degree,
                 vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
             ),
             TransitionConstraintDegree::with_cycles(2, vec![SIG_CYCLE_LENGTH]),
             // Rescue hash
             TransitionConstraintDegree::with_cycles(1, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![SIG_CYCLE_LENGTH]),
@@ -109,10 +193,10 @@ impl Air for SchnorrAir {
         let global_mask = periodic_values[0];
         let scalar_mult_flag = periodic_values[1];
         let doubling_flag = periodic_values[2];
-        let pkey_point = &periodic_values[3..5];
-        let hash_flag = periodic_values[5];
-        let hash_internal_inputs = &periodic_values[6..8];
-        let ark = &periodic_values[8..];
+        let pkey_point = &periodic_values[3..15];
+        let hash_flag = periodic_values[15];
+        let hash_internal_inputs = &periodic_values[16..23];
+        let ark = &periodic_values[23..];
 
         let copy_hash_flag = not(hash_flag) * global_mask;
         let final_point_addition_flag = not(scalar_mult_flag) * global_mask;
@@ -139,22 +223,67 @@ impl Air for SchnorrAir {
         vec![
             // Starting values (see init_sig_verification_state() in build_trace())
             Assertion::periodic(0, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
-            Assertion::periodic(1, 0, SIG_CYCLE_LENGTH, BaseElement::ONE),
+            Assertion::periodic(1, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(2, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(3, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(4, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
-            Assertion::periodic(5, 0, SIG_CYCLE_LENGTH, BaseElement::ONE),
-            Assertion::periodic(6, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(5, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(6, 0, SIG_CYCLE_LENGTH, BaseElement::ONE),
             Assertion::periodic(7, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(8, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
-            Assertion::sequence(9, 0, SIG_CYCLE_LENGTH, signatures.0.clone()),
+            Assertion::periodic(9, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(10, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(11, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             Assertion::periodic(12, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(13, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(14, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(15, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(16, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(17, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(18, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(19, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(20, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(21, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(22, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(23, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(24, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(25, 0, SIG_CYCLE_LENGTH, BaseElement::ONE),
+            Assertion::periodic(26, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(27, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(28, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(29, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(30, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(31, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(32, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(33, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(34, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(35, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(36, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(37, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(38, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::sequence(39, 0, SIG_CYCLE_LENGTH, signatures.0.clone()),
+            Assertion::sequence(40, 0, SIG_CYCLE_LENGTH, signatures.1.clone()),
+            Assertion::sequence(41, 0, SIG_CYCLE_LENGTH, signatures.2.clone()),
+            Assertion::sequence(42, 0, SIG_CYCLE_LENGTH, signatures.3.clone()),
+            Assertion::sequence(43, 0, SIG_CYCLE_LENGTH, signatures.4.clone()),
+            Assertion::sequence(44, 0, SIG_CYCLE_LENGTH, signatures.5.clone()),
+            Assertion::periodic(45, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(46, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(47, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(48, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(49, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(50, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(51, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
+            Assertion::periodic(52, 0, SIG_CYCLE_LENGTH, BaseElement::ZERO),
             // Ending values
             // We can compute R = S + h.P in the registers of S directly,
             // hence checking the x_coord of R in register 0 (i.e. x(S))
             Assertion::sequence(0, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.0),
+            Assertion::sequence(1, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.1),
+            Assertion::sequence(2, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.2),
+            Assertion::sequence(3, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.3),
+            Assertion::sequence(4, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.4),
+            Assertion::sequence(5, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.5),
         ]
     }
 
@@ -165,29 +294,31 @@ impl Air for SchnorrAir {
         stitch(
             &mut columns,
             periodic_columns(),
-            vec![(0, 0), (1, 1), (2, 2), (3, 3 + POINT_WIDTH - 1)],
+            vec![(0, 0), (1, 1), (2, 2), (3, 3 + POINT_WIDTH * 2 / 3)],
         );
         // Values to feed to the last registers of the hash state at the end of a cycle.
         // Always zero (i.e. resetting the rate) or equal to the chunks of the message.
         let mut hash_intermediate_inputs =
-            vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH * self.signatures.len()]; 2];
+            vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH * self.signatures.len()]; RATE_WIDTH];
 
         // Public key coordinates extracted from the signed messages and to be used during scalar multiplications
-        let mut pub_keys = vec![
-            vec![BaseElement::ZERO; SIG_CYCLE_LENGTH * self.signatures.len()];
-            POINT_WIDTH - 1
-        ];
+        let pkey_len = POINT_WIDTH * 2 / 3; // ignore Z
+        let mut pub_keys =
+            vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH * self.signatures.len()]; pkey_len];
 
         for message_index in 0..self.signatures.len() {
             for i in 0..SIG_CYCLE_LENGTH {
-                for j in 0..2 {
+                for j in 0..RATE_WIDTH {
                     if i < NUM_HASH_ITER - 1 {
                         hash_intermediate_inputs[j][i * HASH_CYCLE_LENGTH
                             + NUM_HASH_ROUNDS
-                            + 1
                             + message_index * SIG_CYCLE_LENGTH] =
-                            self.messages[message_index][j + i * 2];
+                            self.messages[message_index][j + i * RATE_WIDTH];
                     }
+                    pub_keys[j][i + message_index * SIG_CYCLE_LENGTH] =
+                        self.messages[message_index][j];
+                }
+                for j in RATE_WIDTH..pkey_len {
                     pub_keys[j][i + message_index * SIG_CYCLE_LENGTH] =
                         self.messages[message_index][j];
                 }
@@ -198,12 +329,14 @@ impl Air for SchnorrAir {
         stitch(
             &mut columns,
             pub_keys,
-            (3..3 + POINT_WIDTH - 1).enumerate().collect(),
+            (3..3 + pkey_len).enumerate().collect(),
         );
         stitch(
             &mut columns,
             hash_intermediate_inputs,
-            (3 + POINT_WIDTH..3 + POINT_WIDTH + 2).enumerate().collect(),
+            (3 + pkey_len + 1..3 + POINT_WIDTH + 2)
+                .enumerate()
+                .collect(),
         );
 
         // Append the rescue round constants
@@ -229,11 +362,21 @@ fn enforce_hash_copy<E: FieldElement>(
 ) {
     result.agg_constraint(0, flag, are_equal(current[0], next[0]));
     result.agg_constraint(1, flag, are_equal(current[1], next[1]));
+    result.agg_constraint(2, flag, are_equal(current[2], next[2]));
+    result.agg_constraint(3, flag, are_equal(current[3], next[3]));
+    result.agg_constraint(4, flag, are_equal(current[4], next[4]));
+    result.agg_constraint(5, flag, are_equal(current[5], next[5]));
+    result.agg_constraint(6, flag, are_equal(current[6], next[6]));
     // internal_inputs are either zero (no difference with original hash chain) when resetting the
     // last registers or equal to the message elements, to be fed to the hash in an iterated way.
     // See build_trace() for more info
-    result.agg_constraint(2, flag, is_zero(next[2] - internal_inputs[0]));
-    result.agg_constraint(3, flag, is_zero(next[3] - internal_inputs[1]));
+    result.agg_constraint(7, flag, is_zero(next[7] - internal_inputs[0]));
+    result.agg_constraint(8, flag, is_zero(next[8] - internal_inputs[1]));
+    result.agg_constraint(9, flag, is_zero(next[9] - internal_inputs[2]));
+    result.agg_constraint(10, flag, is_zero(next[10] - internal_inputs[3]));
+    result.agg_constraint(11, flag, is_zero(next[11] - internal_inputs[4]));
+    result.agg_constraint(12, flag, is_zero(next[12] - internal_inputs[5]));
+    result.agg_constraint(13, flag, is_zero(next[13] - internal_inputs[6]));
 }
 
 // HELPER FUNCTIONS
@@ -304,14 +447,16 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     hash_internal_inputs: &[E],
 ) {
     // Point to be used in the double-and-add operations of registers [0,1,2] (s.G)
-    let generator_point = [
-        GENERATOR[0].into(),
-        GENERATOR[1].into(),
-        GENERATOR[2].into(),
-    ];
+    let generator_point: Vec<E> = GENERATOR.iter().map(|&coord| coord.into()).collect();
 
     // Point to be used in the double-and-add operations of registers [4,5,6] (h.P)
-    let pkey_point = [pkey_point[0], pkey_point[1], E::ONE];
+    let mut pkey_point: Vec<E> = pkey_point.iter().map(|&coord| coord.into()).collect();
+    pkey_point.push(E::ONE);
+    pkey_point.push(E::ZERO);
+    pkey_point.push(E::ZERO);
+    pkey_point.push(E::ZERO);
+    pkey_point.push(E::ZERO);
+    pkey_point.push(E::ZERO);
 
     // When scalar_mult_flag = 1, constraints for a double-and-add
     // step are enforced on the dedicated registers for S and h.P,
@@ -401,13 +546,33 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
 }
 
-fn transpose_signatures(signatures: &[(BaseElement, Scalar)]) -> (Vec<BaseElement>, Vec<Scalar>) {
+fn transpose_signatures(
+    signatures: &[([BaseElement; 6], Scalar)],
+) -> (
+    Vec<BaseElement>,
+    Vec<BaseElement>,
+    Vec<BaseElement>,
+    Vec<BaseElement>,
+    Vec<BaseElement>,
+    Vec<BaseElement>,
+    Vec<Scalar>,
+) {
     let n = signatures.len();
     let mut r1 = Vec::with_capacity(n);
     let mut r2 = Vec::with_capacity(n);
+    let mut r3 = Vec::with_capacity(n);
+    let mut r4 = Vec::with_capacity(n);
+    let mut r5 = Vec::with_capacity(n);
+    let mut r6 = Vec::with_capacity(n);
+    let mut r7 = Vec::with_capacity(n);
     for element in signatures {
-        r1.push(element.0);
-        r2.push(element.1);
+        r1.push(element.0[0]);
+        r2.push(element.0[1]);
+        r3.push(element.0[2]);
+        r4.push(element.0[3]);
+        r5.push(element.0[4]);
+        r6.push(element.0[5]);
+        r7.push(element.1);
     }
-    (r1, r2)
+    (r1, r2, r3, r4, r5, r6, r7)
 }

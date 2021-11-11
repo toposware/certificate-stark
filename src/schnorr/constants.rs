@@ -12,7 +12,7 @@ pub use super::rescue::{HASH_CYCLE_LENGTH, HASH_CYCLE_MASK, NUM_HASH_ROUNDS, STA
 // Rescue constants
 
 /// Number of hash iterations for hashing the message
-pub const NUM_HASH_ITER: usize = 4;
+pub const NUM_HASH_ITER: usize = 5;
 /// Total number of steps for the iterated hash of the message to be signed
 pub const TOTAL_HASH_LENGTH: usize = HASH_CYCLE_LENGTH * NUM_HASH_ITER;
 
