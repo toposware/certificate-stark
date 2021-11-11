@@ -17,6 +17,9 @@ struct MyOptions {
     #[options(help = "number of FRI queries (default 42)", short = "q")]
     num_queries: Option<usize>,
 
+    #[options(help = "field extension (default false)", short = "e")]
+    field_extension: Option<bool>,
+
     #[options(help = "blowup factor (default 8)", short = "b")]
     blowup_factor: Option<usize>,
 
@@ -45,6 +48,7 @@ fn main() {
     let num_queries = options.num_queries.unwrap_or(42);
     let blowup_factor = options.blowup_factor.unwrap_or(8);
     let grinding_factor = options.grinding_factor.unwrap_or(0);
+    let field_extension = options.field_extension.unwrap_or(false);
     let hash_function = if options.hash_function.unwrap_or(0) == 1 {
         HashFunction::Sha3_256
     } else {
@@ -57,7 +61,11 @@ fn main() {
         blowup_factor,
         grinding_factor,
         hash_function,
-        FieldExtension::None,
+        if field_extension {
+            FieldExtension::Quadratic
+        } else {
+            FieldExtension::None
+        },
         fri_folding,
         256,
     );
