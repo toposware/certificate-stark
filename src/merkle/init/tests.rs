@@ -22,7 +22,7 @@ fn pre_merkle_test_basic_proof_verification_fail() {
 
 fn build_options() -> ProofOptions {
     ProofOptions::new(
-        42,
+        24,
         4,
         0,
         HashFunction::Blake3_256,

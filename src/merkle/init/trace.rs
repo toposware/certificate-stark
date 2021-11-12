@@ -46,33 +46,29 @@ pub fn init_merkle_initialization_state(
     delta: BaseElement,
 ) {
     // Sender's initial state in the initial merkle tree.
-    // The first 2 registers are the sender's public key
-    state[SENDER_INITIAL_POS] = s_inputs[0];
-    state[SENDER_INITIAL_POS + 1] = s_inputs[1];
-    // then the coins
-    state[SENDER_UPDATED_POS + 2] = s_inputs[2];
-    // and the nonce
-    state[SENDER_UPDATED_POS + 3] = s_inputs[3];
+    // The first 12 registers are the sender's public key...
+    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + 12].copy_from_slice(&s_inputs[0..12]);
+    // then the coins...
+    state[SENDER_UPDATED_POS + 12] = s_inputs[12];
+    // and the nonce.
+    state[SENDER_UPDATED_POS + 13] = s_inputs[13];
 
     // Sender's updated state.
-    state[SENDER_UPDATED_POS] = s_inputs[0];
-    state[SENDER_UPDATED_POS + 1] = s_inputs[1];
-    state[SENDER_UPDATED_POS + 2] = s_inputs[2] - delta;
-    state[SENDER_UPDATED_POS + 3] = s_inputs[3] + BaseElement::ONE;
+    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + 12].copy_from_slice(&s_inputs[0..12]);
+    state[SENDER_UPDATED_POS + 12] = s_inputs[12] - delta;
+    state[SENDER_UPDATED_POS + 13] = s_inputs[13] + BaseElement::ONE;
 
     // Receiver's intial state is composed by the public key...
-    state[RECEIVER_INITIAL_POS] = r_inputs[0];
-    state[RECEIVER_INITIAL_POS + 1] = r_inputs[1];
-    // the coins...
-    state[RECEIVER_INITIAL_POS + 2] = r_inputs[2];
+    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + 12].copy_from_slice(&r_inputs[0..12]);
+    // then the coins...
+    state[RECEIVER_INITIAL_POS + 12] = r_inputs[12];
     // and the nonce.
-    state[RECEIVER_INITIAL_POS + 3] = r_inputs[3];
+    state[RECEIVER_INITIAL_POS + 13] = r_inputs[13];
 
-    // Receiver's final state
-    state[RECEIVER_UPDATED_POS] = r_inputs[0];
-    state[RECEIVER_UPDATED_POS + 1] = r_inputs[1];
-    state[RECEIVER_UPDATED_POS + 2] = r_inputs[2] + delta;
-    state[RECEIVER_UPDATED_POS + 3] = r_inputs[3];
+    // Receiver's final state.
+    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + 12].copy_from_slice(&r_inputs[0..12]);
+    state[RECEIVER_UPDATED_POS + 12] = r_inputs[12] + delta;
+    state[RECEIVER_UPDATED_POS + 13] = r_inputs[13];
 }
 
 // TRACE TRANSITION FUNCTION
