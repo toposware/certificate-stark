@@ -294,7 +294,8 @@ pub fn get_round_constants() -> Vec<Vec<BaseElement>> {
 #[allow(clippy::needless_range_loop)]
 fn apply_sbox<E: FieldElement>(state: &mut [E]) {
     for i in 0..STATE_WIDTH {
-        state[i] = state[i].exp(ALPHA.into());
+        // ALPHA = 3
+        state[i] *= state[i].square();
     }
 }
 
@@ -342,7 +343,10 @@ fn apply_inv_mds<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
 
 // CONSTANTS
 // ================================================================================================
+
+#[allow(unused)]
 const ALPHA: u32 = 3;
+
 const INV_ALPHA: [u64; 4] = [
     0xaaaaaaaaaaaaaaab,
     0xaaaaaaaaaaaaaaaa,
