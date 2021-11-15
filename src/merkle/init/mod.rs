@@ -21,9 +21,8 @@ pub use trace::{
     build_trace, init_merkle_initialization_state, update_merkle_initialization_state,
 };
 
-// TODO: bring back if useful
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 // MERKLE TREE UPDATE EXAMPLE
 // ================================================================================================
