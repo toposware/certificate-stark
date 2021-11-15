@@ -19,8 +19,8 @@ use winterfell::iterators::*;
 // ================================================================================================
 
 pub fn build_trace(
-    messages: &[[BaseElement; 28]],
-    signatures: &[([BaseElement; 6], Scalar)],
+    messages: &[[BaseElement; AFFINE_POINT_WIDTH * 2 + 4]],
+    signatures: &[([BaseElement; POINT_COORDINATE_WIDTH], Scalar)],
 ) -> ExecutionTrace<BaseElement> {
     // allocate memory to hold the trace table
     let trace_length = SIG_CYCLE_LENGTH * messages.len();
@@ -49,16 +49,17 @@ pub fn build_trace(
 // ================================================================================================
 
 pub fn init_sig_verification_state(
-    signature: ([BaseElement; 6], Scalar),
+    signature: ([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
     state: &mut [BaseElement],
 ) {
     // initialize first state of the computation
     state[0..TRACE_WIDTH].copy_from_slice(&[BaseElement::ZERO; TRACE_WIDTH]);
-    state[6] = BaseElement::ONE; //   y(S)
+    state[POINT_COORDINATE_WIDTH] = BaseElement::ONE; // y(S)
 
-    state[25] = BaseElement::ONE; //   y(h.P)
+    state[PROJECTIVE_POINT_WIDTH + POINT_COORDINATE_WIDTH + 1] = BaseElement::ONE; // y(h.P)
 
-    state[39..45].copy_from_slice(&signature.0[..]); //        Rescue[0] = x(R)
+    state[PROJECTIVE_POINT_WIDTH * 2 + 3..PROJECTIVE_POINT_WIDTH * 2 + POINT_COORDINATE_WIDTH + 3]
+        .copy_from_slice(&signature.0[..]); // x(R)
 }
 
 // TRANSITION FUNCTION
@@ -66,8 +67,8 @@ pub fn init_sig_verification_state(
 
 pub fn update_sig_verification_state(
     step: usize,
-    message: [BaseElement; 28],
-    pkey_point: [BaseElement; 18],
+    message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+    pkey_point: [BaseElement; PROJECTIVE_POINT_WIDTH],
     s_bits: &BitSlice<Lsb0, u8>,
     h_bits: &BitSlice<Lsb0, u8>,
     state: &mut [BaseElement],
@@ -78,31 +79,24 @@ pub fn update_sig_verification_state(
 
     // enforcing the three kind of rescue operations
     if rescue_flag && (rescue_step < NUM_HASH_ROUNDS) {
-        // for the first 14 steps in every cycle, compute a single round of Rescue hash
-        rescue::apply_round(&mut state[39..], step);
+        // for the first NUM_HASH_ROUNDS steps in every cycle, compute a single round of Rescue hash
+        rescue::apply_round(&mut state[PROJECTIVE_POINT_WIDTH * 2 + 3..], step);
     } else if rescue_flag && (step < (NUM_HASH_ITER - 1) * HASH_CYCLE_LENGTH) {
-        // for the 8th step, insert message chunks in the state registers
+        // for the next step, insert message chunks in the state registers
         let index = step / HASH_CYCLE_LENGTH;
-        state[46] = message[7 * index];
-        state[47] = message[7 * index + 1];
-        state[48] = message[7 * index + 2];
-        state[49] = message[7 * index + 3];
-        state[50] = message[7 * index + 4];
-        state[51] = message[7 * index + 5];
-        state[52] = message[7 * index + 6];
+        for i in 0..rescue::RATE_WIDTH {
+            state[PROJECTIVE_POINT_WIDTH * 2 + rescue::RATE_WIDTH + 3 + i] =
+                message[rescue::RATE_WIDTH * index + i];
+        }
     } else if rescue_flag {
         // Register cells are by default copied from the previous state if no operation
         // is specified. This would conflict for here, as the "periodic" values for the
         // enforce_hash_copy() internal inputs are set to 0 at almost every step.
         // Hence we manually set them to zero for the final hash iteration, and this will
         // carry over until the end of the trace
-        state[46] = BaseElement::ZERO;
-        state[47] = BaseElement::ZERO;
-        state[48] = BaseElement::ZERO;
-        state[49] = BaseElement::ZERO;
-        state[50] = BaseElement::ZERO;
-        state[51] = BaseElement::ZERO;
-        state[52] = BaseElement::ZERO;
+        for i in 0..rescue::RATE_WIDTH {
+            state[PROJECTIVE_POINT_WIDTH * 2 + rescue::RATE_WIDTH + 3 + i] = BaseElement::ZERO;
+        }
     }
 
     // enforcing scalar multiplications
@@ -110,37 +104,43 @@ pub fn update_sig_verification_state(
         Ordering::Less => {
             let real_step = step / 2;
             let is_doubling_step = step % 2 == 0;
-            state[POINT_WIDTH] = BaseElement::from(s_bits[bit_length - 1 - real_step] as u8);
-            state[2 * POINT_WIDTH + 1] =
+            state[PROJECTIVE_POINT_WIDTH] =
+                BaseElement::from(s_bits[bit_length - 1 - real_step] as u8);
+            state[2 * PROJECTIVE_POINT_WIDTH + 1] =
                 BaseElement::from(h_bits[bit_length - 1 - real_step] as u8);
 
             if is_doubling_step {
-                ecc::apply_point_doubling(&mut state[0..POINT_WIDTH + 1]);
-                ecc::apply_point_doubling(&mut state[POINT_WIDTH + 1..2 * POINT_WIDTH + 2]);
+                ecc::apply_point_doubling(&mut state[0..PROJECTIVE_POINT_WIDTH + 1]);
+                ecc::apply_point_doubling(
+                    &mut state[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
+                );
                 field::apply_double_and_add_step(
-                    &mut state[2 * POINT_WIDTH + 1..2 * POINT_WIDTH + 3],
+                    &mut state[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 3],
                     1,
                     0,
                 );
             } else {
-                ecc::apply_point_addition(&mut state[0..POINT_WIDTH + 1], &GENERATOR);
+                ecc::apply_point_addition(&mut state[0..PROJECTIVE_POINT_WIDTH + 1], &GENERATOR);
                 ecc::apply_point_addition(
-                    &mut state[POINT_WIDTH + 1..2 * POINT_WIDTH + 2],
+                    &mut state[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
                     &pkey_point,
                 );
             }
         }
         Ordering::Equal => {
-            let mut hp_point = [BaseElement::ZERO; 18];
-            hp_point.copy_from_slice(&state[POINT_WIDTH + 1..POINT_WIDTH * 2 + 1]);
-            state[POINT_WIDTH] = BaseElement::ONE;
-            ecc::apply_point_addition(&mut state[..POINT_WIDTH + 1], &hp_point);
+            let mut hp_point = [BaseElement::ZERO; PROJECTIVE_POINT_WIDTH];
+            hp_point.copy_from_slice(
+                &state[PROJECTIVE_POINT_WIDTH + 1..PROJECTIVE_POINT_WIDTH * 2 + 1],
+            );
+            state[PROJECTIVE_POINT_WIDTH] = BaseElement::ONE;
+            ecc::apply_point_addition(&mut state[..PROJECTIVE_POINT_WIDTH + 1], &hp_point);
             // Affine coordinates, hence do X/Z
-            let mut x = [BaseElement::ZERO; 6];
-            x.copy_from_slice(&state[0..6]);
-            let mut z = [BaseElement::ZERO; 6];
-            z.copy_from_slice(&state[12..18]);
-            state[0..6].copy_from_slice(&ecc::mul_fp6(&x, &ecc::invert_fp6(&z)));
+            let mut x = [BaseElement::ZERO; POINT_COORDINATE_WIDTH];
+            x.copy_from_slice(&state[0..POINT_COORDINATE_WIDTH]);
+            let mut z = [BaseElement::ZERO; POINT_COORDINATE_WIDTH];
+            z.copy_from_slice(&state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH]);
+            state[0..POINT_COORDINATE_WIDTH]
+                .copy_from_slice(&ecc::mul_fp6(&x, &ecc::invert_fp6(&z)));
         }
         _ => {}
     }
@@ -150,14 +150,12 @@ pub fn update_sig_verification_state(
 // ================================================================================================
 
 pub fn build_sig_info(
-    message: &[BaseElement; 28],
-    signature: &([BaseElement; 6], Scalar),
-) -> ([BaseElement; 18], [u8; 32], [u8; 32]) {
-    let mut pkey_point = [BaseElement::ZERO; 18];
-    for i in 0..12 {
-        pkey_point[i] = message[i];
-    }
-    pkey_point[12] = BaseElement::ONE;
+    message: &[BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+    signature: &([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
+) -> ([BaseElement; PROJECTIVE_POINT_WIDTH], [u8; 32], [u8; 32]) {
+    let mut pkey_point = [BaseElement::ZERO; PROJECTIVE_POINT_WIDTH];
+    pkey_point[..AFFINE_POINT_WIDTH].clone_from_slice(&message[..AFFINE_POINT_WIDTH]);
+    pkey_point[AFFINE_POINT_WIDTH] = BaseElement::ONE;
     let s_bytes = signature.1.to_bytes();
 
     let h = super::hash_message(signature.0, *message);

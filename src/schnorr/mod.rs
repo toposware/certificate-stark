@@ -18,8 +18,9 @@ use winterfell::{
 };
 
 use super::utils::{
-    ecc, field,
-    rescue::{self, Rescue252},
+    ecc::{self, AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH},
+    field,
+    rescue::{self, Rescue252, RATE_WIDTH as HASH_RATE_WIDTH},
 };
 
 pub mod constants;
@@ -56,8 +57,8 @@ pub fn get_example(num_signatures: usize) -> SchnorrExample {
 
 pub struct SchnorrExample {
     options: ProofOptions,
-    messages: Vec<[BaseElement; 28]>,
-    signatures: Vec<([BaseElement; 6], Scalar)>,
+    messages: Vec<[BaseElement; AFFINE_POINT_WIDTH * 2 + 4]>,
+    signatures: Vec<([BaseElement; POINT_COORDINATE_WIDTH], Scalar)>,
 }
 
 impl SchnorrExample {
@@ -71,10 +72,10 @@ impl SchnorrExample {
             let skey = Scalar::random(&mut rng);
             let pkey = AffinePoint::from(AffinePoint::generator() * skey);
 
-            let mut message = [BaseElement::ZERO; 28];
-            message[0..6].copy_from_slice(&pkey.get_x());
-            message[6..12].copy_from_slice(&pkey.get_y());
-            for msg in message.iter_mut().skip(12) {
+            let mut message = [BaseElement::ZERO; AFFINE_POINT_WIDTH * 2 + 4];
+            message[0..POINT_COORDINATE_WIDTH].copy_from_slice(&pkey.get_x());
+            message[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&pkey.get_y());
+            for msg in message.iter_mut().skip(AFFINE_POINT_WIDTH) {
                 *msg = BaseElement::random(&mut rng);
             }
 
@@ -161,7 +162,10 @@ impl SchnorrExample {
 // ================================================================================================
 
 /// Computes a Schnorr signature
-pub fn sign(message: [BaseElement; 28], skey: Scalar) -> ([BaseElement; 6], Scalar) {
+pub fn sign(
+    message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+    skey: Scalar,
+) -> ([BaseElement; POINT_COORDINATE_WIDTH], Scalar) {
     let mut rng = OsRng;
     let r = Scalar::random(&mut rng);
     let r_point = AffinePoint::from(AffinePoint::generator() * r);
@@ -181,12 +185,13 @@ pub fn sign(message: [BaseElement; 28], skey: Scalar) -> ([BaseElement; 6], Scal
 }
 
 /// Verifies a Schnorr signature
-pub fn verify_signature(message: [BaseElement; 28], signature: ([BaseElement; 6], Scalar)) -> bool {
+pub fn verify_signature(
+    message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+    signature: ([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
+) -> bool {
     let s_point = AffinePoint::generator() * signature.1;
-    let mut pkey_coords = [BaseElement::ZERO; 12];
-    for i in 0..12 {
-        pkey_coords[i] = message[i];
-    }
+    let mut pkey_coords = [BaseElement::ZERO; AFFINE_POINT_WIDTH];
+    pkey_coords[..AFFINE_POINT_WIDTH].clone_from_slice(&message[..AFFINE_POINT_WIDTH]);
     let pkey = AffinePoint::from_raw_coordinates(pkey_coords);
     assert!(pkey.is_on_curve());
 
@@ -207,7 +212,10 @@ pub fn verify_signature(message: [BaseElement; 28], signature: ([BaseElement; 6]
     r_point.get_x() == signature.0
 }
 
-fn hash_message(input: [BaseElement; 6], message: [BaseElement; 28]) -> [BaseElement; 7] {
+fn hash_message(
+    input: [BaseElement; POINT_COORDINATE_WIDTH],
+    message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+) -> [BaseElement; HASH_RATE_WIDTH] {
     let mut h = Rescue252::digest(&input);
     let mut message_chunk = rescue::Hash::new(
         message[0], message[1], message[2], message[3], message[4], message[5], message[6],

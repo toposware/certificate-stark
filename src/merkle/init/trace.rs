@@ -15,8 +15,8 @@ use crate::utils::rescue;
 // ------------------------------------------------------------------------------------------------
 
 pub fn build_trace(
-    s_inputs: [BaseElement; 14],
-    r_inputs: [BaseElement; 14],
+    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
 ) -> ExecutionTrace<BaseElement> {
     // allocate memory to hold the trace table
@@ -41,34 +41,39 @@ pub fn build_trace(
 
 pub fn init_merkle_initialization_state(
     state: &mut [BaseElement],
-    s_inputs: [BaseElement; 14],
-    r_inputs: [BaseElement; 14],
+    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
 ) {
     // Sender's initial state in the initial merkle tree.
-    // The first 12 registers are the sender's public key...
-    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + 12].copy_from_slice(&s_inputs[0..12]);
+    // The first AFFINE_POINT_WIDTH registers are the sender's public key...
+    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + AFFINE_POINT_WIDTH]
+        .copy_from_slice(&s_inputs[0..AFFINE_POINT_WIDTH]);
     // then the coins...
-    state[SENDER_UPDATED_POS + 12] = s_inputs[12];
+    state[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH] = s_inputs[AFFINE_POINT_WIDTH];
     // and the nonce.
-    state[SENDER_UPDATED_POS + 13] = s_inputs[13];
+    state[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1] = s_inputs[AFFINE_POINT_WIDTH + 1];
 
     // Sender's updated state.
-    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + 12].copy_from_slice(&s_inputs[0..12]);
-    state[SENDER_UPDATED_POS + 12] = s_inputs[12] - delta;
-    state[SENDER_UPDATED_POS + 13] = s_inputs[13] + BaseElement::ONE;
+    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + AFFINE_POINT_WIDTH]
+        .copy_from_slice(&s_inputs[0..AFFINE_POINT_WIDTH]);
+    state[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH] = s_inputs[AFFINE_POINT_WIDTH] - delta;
+    state[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1] =
+        s_inputs[AFFINE_POINT_WIDTH + 1] + BaseElement::ONE;
 
     // Receiver's intial state is composed by the public key...
-    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + 12].copy_from_slice(&r_inputs[0..12]);
+    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH]
+        .copy_from_slice(&r_inputs[0..AFFINE_POINT_WIDTH]);
     // then the coins...
-    state[RECEIVER_INITIAL_POS + 12] = r_inputs[12];
+    state[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH] = r_inputs[AFFINE_POINT_WIDTH];
     // and the nonce.
-    state[RECEIVER_INITIAL_POS + 13] = r_inputs[13];
+    state[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH + 1] = r_inputs[AFFINE_POINT_WIDTH + 1];
 
     // Receiver's final state.
-    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + 12].copy_from_slice(&r_inputs[0..12]);
-    state[RECEIVER_UPDATED_POS + 12] = r_inputs[12] + delta;
-    state[RECEIVER_UPDATED_POS + 13] = r_inputs[13];
+    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH]
+        .copy_from_slice(&r_inputs[0..AFFINE_POINT_WIDTH]);
+    state[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH] = r_inputs[AFFINE_POINT_WIDTH] + delta;
+    state[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 1] = r_inputs[AFFINE_POINT_WIDTH + 1];
 }
 
 // TRACE TRANSITION FUNCTION

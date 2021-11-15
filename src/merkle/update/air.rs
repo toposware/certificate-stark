@@ -105,7 +105,7 @@ impl Air for MerkleAir {
         let ark = &periodic_values[5..];
 
         // Enforce no change in registers representing keys
-        for i in 0..12 {
+        for i in 0..AFFINE_POINT_WIDTH {
             result.agg_constraint(
                 VALUE_CONSTRAINT_RES + i,
                 transaction_setup_flag,
@@ -116,7 +116,7 @@ impl Air for MerkleAir {
             );
 
             result.agg_constraint(
-                VALUE_CONSTRAINT_RES + 12 + i,
+                VALUE_CONSTRAINT_RES + AFFINE_POINT_WIDTH + i,
                 transaction_setup_flag,
                 are_equal(
                     current[RECEIVER_INITIAL_POS + i],
@@ -127,11 +127,11 @@ impl Air for MerkleAir {
 
         // Enforce no change in the receiver's nonce
         result.agg_constraint(
-            VALUE_CONSTRAINT_RES + 24,
+            VALUE_CONSTRAINT_RES + AFFINE_POINT_WIDTH * 2,
             transaction_setup_flag,
             are_equal(
-                current[RECEIVER_INITIAL_POS + 13],
-                current[RECEIVER_UPDATED_POS + 13],
+                current[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH + 1],
+                current[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 1],
             ),
         );
 
@@ -140,17 +140,20 @@ impl Air for MerkleAir {
             BALANCE_CONSTRAINT_RES,
             transaction_setup_flag,
             are_equal(
-                current[SENDER_INITIAL_POS + 12] - current[SENDER_UPDATED_POS + 12],
-                current[RECEIVER_UPDATED_POS + 12] - current[RECEIVER_INITIAL_POS + 12],
+                current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH]
+                    - current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH],
+                current[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH]
+                    - current[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH],
             ),
         );
+
         // Enforce change in the sender's nonce
         result.agg_constraint(
             NONCE_UPDATE_CONSTRAINT_RES,
             transaction_setup_flag,
             are_equal(
-                current[SENDER_UPDATED_POS + 13],
-                current[SENDER_INITIAL_POS + 13] + E::ONE,
+                current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1],
+                current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH + 1] + E::ONE,
             ),
         );
 
@@ -168,8 +171,8 @@ impl Air for MerkleAir {
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
         // assert that Merkle path resolves to the tree root, and that hash capacity
-        // registers (registers 4 and 5) are reset to ZERO every 8 steps
-        // Now we must also resolve to the new root and regiters 7 and 8 are also
+        // registers are reset to ZERO every 8 steps
+        // Now we must also resolve to the new root and the next registers are also
         // hash capacity registers
         // Additionally, we repeat all of this for the receiver
         let last_step = self.trace_length() - 1;

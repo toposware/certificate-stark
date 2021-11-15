@@ -27,21 +27,21 @@ pub mod schnorr_const {
 }
 
 /// Total trace width for the state transition AIR program
-// The 6 extra registers are for copying the public keys, delta and the new sender balance
-pub const TRACE_WIDTH: usize = merkle_const::TRACE_WIDTH + 27;
+// The extra registers are for copying the public keys, delta and the new sender balance
+pub const TRACE_WIDTH: usize = NONCE_COPY_POS + 1;
 
 /// The width of the trace used for Merkle registers
 pub const MERKLE_REGISTER_WIDTH: usize = merkle_const::TRACE_WIDTH;
 /// Beginning position of the copy of the sender's public key
 pub const SENDER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH;
 /// Beginning position of the copy of the receiver's public key
-pub const RECEIVER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + 12;
+pub const RECEIVER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH;
 /// Position of the register copying delta
-pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 24;
+pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH * 2;
 /// Position of the register copying the sender's updated balance
-pub const SIGMA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 25;
+pub const SIGMA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH * 2 + 1;
 /// Position of the register copying the sender's updated nonce
-pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 26;
+pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH * 2 + 2;
 
 //  Indices for the constraint results for various components
 /// Beginning index of constraints for the copy of the sender's public key

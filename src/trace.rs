@@ -19,7 +19,10 @@ use winterfell::{
 use winterfell::iterators::*;
 
 use merkle_const::TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH;
-use schnorr_const::SIG_CYCLE_LENGTH as SCHNORR_LENGTH;
+use schnorr_const::{
+    AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH, PROJECTIVE_POINT_WIDTH,
+    SIG_CYCLE_LENGTH as SCHNORR_LENGTH,
+};
 
 // TRACE GENERATOR
 // ================================================================================================
@@ -58,14 +61,14 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
             let delta_bytes = deltas[i].to_bytes();
             let delta_bits = delta_bytes.as_bits::<Lsb0>();
 
-            let sigma_bytes = (s_old_values[i][12] - deltas[i]).to_bytes();
+            let sigma_bytes = (s_old_values[i][AFFINE_POINT_WIDTH] - deltas[i]).to_bytes();
             let sigma_bits = sigma_bytes.as_bits::<Lsb0>();
 
             let message = super::build_tx_message(
-                &s_old_values[i][0..12],
-                &r_old_values[i][0..12],
+                &s_old_values[i][0..AFFINE_POINT_WIDTH],
+                &r_old_values[i][0..AFFINE_POINT_WIDTH],
                 deltas[i],
-                s_old_values[i][13],
+                s_old_values[i][AFFINE_POINT_WIDTH + 1],
             );
 
             let (pkey_point, sig_bytes, sig_hash_bytes) =
@@ -111,8 +114,8 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
 
 pub fn init_transaction_state(
     initial_root: rescue::Hash,
-    s_old_value: [BaseElement; 14],
-    r_old_value: [BaseElement; 14],
+    s_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
     state: &mut [BaseElement],
 ) {
@@ -127,11 +130,13 @@ pub fn init_transaction_state(
 
     // Copy public keys and sigma = balance_sender - delta
     let start_copy_index = merkle_const::TRACE_WIDTH;
-    state[start_copy_index..start_copy_index + 12].copy_from_slice(&s_old_value[0..12]);
-    state[start_copy_index + 12..start_copy_index + 24].copy_from_slice(&r_old_value[0..12]);
-    state[start_copy_index + 24] = delta;
-    state[start_copy_index + 25] = s_old_value[12] - delta;
-    state[start_copy_index + 26] = s_old_value[13];
+    state[start_copy_index..start_copy_index + AFFINE_POINT_WIDTH]
+        .copy_from_slice(&s_old_value[0..AFFINE_POINT_WIDTH]);
+    state[start_copy_index + AFFINE_POINT_WIDTH..start_copy_index + AFFINE_POINT_WIDTH * 2]
+        .copy_from_slice(&r_old_value[0..AFFINE_POINT_WIDTH]);
+    state[start_copy_index + AFFINE_POINT_WIDTH * 2] = delta;
+    state[start_copy_index + AFFINE_POINT_WIDTH * 2 + 1] = s_old_value[AFFINE_POINT_WIDTH] - delta;
+    state[start_copy_index + AFFINE_POINT_WIDTH * 2 + 2] = s_old_value[AFFINE_POINT_WIDTH + 1];
 }
 
 // TRANSITION FUNCTION
@@ -146,11 +151,11 @@ pub fn update_transaction_state(
     r_branch: Vec<rescue::Hash>,
     delta_bits: &BitSlice<Lsb0, u8>,
     sigma_bits: &BitSlice<Lsb0, u8>,
-    signature: ([BaseElement; 6], Scalar),
+    signature: ([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
     sig_bits: &BitSlice<Lsb0, u8>,
     sig_hash_bits: &BitSlice<Lsb0, u8>,
-    message: [BaseElement; 28],
-    pkey_point: [BaseElement; 18],
+    message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+    pkey_point: [BaseElement; PROJECTIVE_POINT_WIDTH],
     state: &mut [BaseElement],
 ) {
     let merkle_update_flag = step < MERKLE_UPDATE_LENGTH - 1;

@@ -7,7 +7,7 @@ pub mod merkle;
 pub mod range;
 pub mod schnorr;
 pub mod utils;
-use utils::rescue::Rescue252;
+use utils::rescue::{Rescue252, RATE_WIDTH};
 
 mod air;
 use air::{PublicInputs, TransactionAir};
@@ -32,6 +32,7 @@ use winterfell::{
 };
 
 use constants::merkle_const::MERKLE_TREE_DEPTH;
+use constants::schnorr_const::{AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH};
 
 #[cfg(test)]
 mod tests;
@@ -112,7 +113,7 @@ impl TransactionExample {
         let final_root = self.tx_metadata.final_root.to_elements();
         let pub_inputs = PublicInputs {
             initial_root,
-            final_root: [final_root[0]; 7],
+            final_root: [final_root[0]; RATE_WIDTH],
         };
         winterfell::verify::<TransactionAir>(proof, pub_inputs)
     }
@@ -139,14 +140,14 @@ impl TransactionExample {
 pub struct TransactionMetadata {
     initial_roots: Vec<Hash>,
     final_root: Hash,
-    s_old_values: Vec<[BaseElement; 14]>,
-    r_old_values: Vec<[BaseElement; 14]>,
+    s_old_values: Vec<[BaseElement; AFFINE_POINT_WIDTH + 2]>,
+    r_old_values: Vec<[BaseElement; AFFINE_POINT_WIDTH + 2]>,
     s_indices: Vec<usize>,
     r_indices: Vec<usize>,
     s_paths: Vec<Vec<Hash>>,
     r_paths: Vec<Vec<Hash>>,
     deltas: Vec<BaseElement>,
-    signatures: Vec<([BaseElement; 6], Scalar)>,
+    signatures: Vec<([BaseElement; POINT_COORDINATE_WIDTH], Scalar)>,
 }
 
 impl TransactionMetadata {
@@ -154,14 +155,14 @@ impl TransactionMetadata {
     pub fn new(
         initial_roots: Vec<Hash>,
         final_root: Hash,
-        s_old_values: Vec<[BaseElement; 14]>,
-        r_old_values: Vec<[BaseElement; 14]>,
+        s_old_values: Vec<[BaseElement; AFFINE_POINT_WIDTH + 2]>,
+        r_old_values: Vec<[BaseElement; AFFINE_POINT_WIDTH + 2]>,
         s_indices: Vec<usize>,
         r_indices: Vec<usize>,
         s_paths: Vec<Vec<Hash>>,
         r_paths: Vec<Vec<Hash>>,
         deltas: Vec<BaseElement>,
-        signatures: Vec<([BaseElement; 6], Scalar)>,
+        signatures: Vec<([BaseElement; POINT_COORDINATE_WIDTH], Scalar)>,
     ) -> Self {
         // Enforce that all vectors are of equal length
         assert_eq!(initial_roots.len(), s_old_values.len());
@@ -205,11 +206,11 @@ impl TransactionMetadata {
             let pkey = AffinePoint::from(AffinePoint::generator() * skey);
             let value1 = BaseElement::from(value_elements[i * 2]);
             let value2 = BaseElement::from(value_elements[i * 2 + 1]);
-            let mut val = [BaseElement::ZERO; 14];
-            val[0..6].copy_from_slice(&pkey.get_x());
-            val[6..12].copy_from_slice(&pkey.get_y());
-            val[12] = value1;
-            val[13] = value2;
+            let mut val = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
+            val[0..POINT_COORDINATE_WIDTH].copy_from_slice(&pkey.get_x());
+            val[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&pkey.get_y());
+            val[AFFINE_POINT_WIDTH] = value1;
+            val[AFFINE_POINT_WIDTH + 1] = value2;
             values.push(val);
             leaves.push(Rescue252::merge(&[
                 Hash::new(val[0], val[1], val[2], val[3], val[4], val[5], val[6]),
@@ -225,8 +226,8 @@ impl TransactionMetadata {
         let mut initial_roots = Vec::new();
         // Initialize the vectors
         let mut s_secret_keys = vec![Scalar::zero(); num_transactions];
-        let mut s_old_values = vec![[BaseElement::ZERO; 14]; num_transactions];
-        let mut r_old_values = vec![[BaseElement::ZERO; 14]; num_transactions];
+        let mut s_old_values = vec![[BaseElement::ZERO; AFFINE_POINT_WIDTH + 2]; num_transactions];
+        let mut r_old_values = vec![[BaseElement::ZERO; AFFINE_POINT_WIDTH + 2]; num_transactions];
         let mut s_indices = vec![0; num_transactions];
         let mut r_indices = vec![0; num_transactions];
         const EMPTY_PATH: Vec<Hash> = Vec::new();
@@ -267,9 +268,9 @@ impl TransactionMetadata {
             s_paths[transaction_num] = tree.prove(s_index).unwrap();
 
             // Update the Merkle tree with the new values at the same indices
-            values[s_index][12] -= delta;
-            values[s_index][13] += BaseElement::ONE;
-            values[r_index][12] += delta;
+            values[s_index][AFFINE_POINT_WIDTH] -= delta;
+            values[s_index][AFFINE_POINT_WIDTH + 1] += BaseElement::ONE;
+            values[r_index][AFFINE_POINT_WIDTH] += delta;
             leaves[s_index] = Rescue252::merge(&[
                 Hash::new(
                     values[s_index][0],
@@ -329,10 +330,10 @@ impl TransactionMetadata {
         for i in 0..num_transactions {
             // A message consists in sender's pkey, receiver's pkey, amount to be sent and sender's nonce.
             let message = build_tx_message(
-                &s_old_values[i][0..12],
-                &r_old_values[i][0..12],
+                &s_old_values[i][0..AFFINE_POINT_WIDTH],
+                &r_old_values[i][0..AFFINE_POINT_WIDTH],
                 deltas[i],
-                s_old_values[i][13],
+                s_old_values[i][AFFINE_POINT_WIDTH + 1],
             );
             signatures.push(schnorr::sign(message, s_secret_keys[i]));
         }
@@ -363,13 +364,13 @@ fn build_tx_message(
     r_addr: &[BaseElement],
     amount: BaseElement,
     nonce: BaseElement,
-) -> [BaseElement; 28] {
-    let mut message = [BaseElement::ZERO; 28];
+) -> [BaseElement; AFFINE_POINT_WIDTH * 2 + 4] {
+    let mut message = [BaseElement::ZERO; AFFINE_POINT_WIDTH * 2 + 4];
 
-    message[0..12].copy_from_slice(s_addr);
-    message[12..24].copy_from_slice(r_addr);
-    message[24] = amount;
-    message[25] = nonce;
+    message[0..AFFINE_POINT_WIDTH].copy_from_slice(s_addr);
+    message[AFFINE_POINT_WIDTH..AFFINE_POINT_WIDTH * 2].copy_from_slice(r_addr);
+    message[AFFINE_POINT_WIDTH * 2] = amount;
+    message[AFFINE_POINT_WIDTH * 2 + 1] = nonce;
 
     message
 }

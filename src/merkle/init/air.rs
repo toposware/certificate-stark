@@ -17,8 +17,8 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub s_inputs: [BaseElement; 14],
-    pub r_inputs: [BaseElement; 14],
+    pub s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    pub r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     pub delta: BaseElement,
 }
 
@@ -32,8 +32,8 @@ impl Serializable for PublicInputs {
 
 pub struct PreMerkleAir {
     context: AirContext<BaseElement>,
-    s_inputs: [BaseElement; 14],
-    r_inputs: [BaseElement; 14],
+    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
 }
 
@@ -44,64 +44,11 @@ impl Air for PreMerkleAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        let degrees = vec![
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-        ];
+        let mut degrees = Vec::with_capacity(HASH_STATE_WIDTH * 4);
+        for _ in 0..HASH_STATE_WIDTH * 4 {
+            degrees.push(TransitionConstraintDegree::new(3));
+        }
+
         assert_eq!(TRACE_WIDTH, trace_info.width());
         PreMerkleAir {
             context: AirContext::new(trace_info, degrees, options),
@@ -134,69 +81,64 @@ impl Air for PreMerkleAir {
     }
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
-        vec![
-            //check initial values agains public inputs
-            Assertion::single(SENDER_INITIAL_POS, 0, self.s_inputs[0]),
-            Assertion::single(SENDER_INITIAL_POS + 1, 0, self.s_inputs[1]),
-            Assertion::single(SENDER_INITIAL_POS + 2, 0, self.s_inputs[2]),
-            Assertion::single(SENDER_INITIAL_POS + 3, 0, self.s_inputs[3]),
-            Assertion::single(SENDER_INITIAL_POS + 4, 0, self.s_inputs[4]),
-            Assertion::single(SENDER_INITIAL_POS + 5, 0, self.s_inputs[5]),
-            Assertion::single(SENDER_INITIAL_POS + 6, 0, self.s_inputs[6]),
-            Assertion::single(SENDER_INITIAL_POS + 7, 0, self.s_inputs[7]),
-            Assertion::single(SENDER_INITIAL_POS + 8, 0, self.s_inputs[8]),
-            Assertion::single(SENDER_INITIAL_POS + 9, 0, self.s_inputs[9]),
-            Assertion::single(SENDER_INITIAL_POS + 10, 0, self.s_inputs[10]),
-            Assertion::single(SENDER_INITIAL_POS + 11, 0, self.s_inputs[11]),
-            Assertion::single(SENDER_INITIAL_POS + 12, 0, self.s_inputs[12]),
-            Assertion::single(SENDER_INITIAL_POS + 13, 0, self.s_inputs[13]),
-            Assertion::single(SENDER_UPDATED_POS, 0, self.s_inputs[0]),
-            Assertion::single(SENDER_UPDATED_POS + 1, 0, self.s_inputs[1]),
-            Assertion::single(SENDER_UPDATED_POS + 2, 0, self.s_inputs[2]),
-            Assertion::single(SENDER_UPDATED_POS + 3, 0, self.s_inputs[3]),
-            Assertion::single(SENDER_UPDATED_POS + 4, 0, self.s_inputs[4]),
-            Assertion::single(SENDER_UPDATED_POS + 5, 0, self.s_inputs[5]),
-            Assertion::single(SENDER_UPDATED_POS + 6, 0, self.s_inputs[6]),
-            Assertion::single(SENDER_UPDATED_POS + 7, 0, self.s_inputs[7]),
-            Assertion::single(SENDER_UPDATED_POS + 8, 0, self.s_inputs[8]),
-            Assertion::single(SENDER_UPDATED_POS + 9, 0, self.s_inputs[9]),
-            Assertion::single(SENDER_UPDATED_POS + 10, 0, self.s_inputs[10]),
-            Assertion::single(SENDER_UPDATED_POS + 11, 0, self.s_inputs[11]),
-            Assertion::single(SENDER_UPDATED_POS + 12, 0, self.s_inputs[12] - self.delta),
-            Assertion::single(
-                SENDER_UPDATED_POS + 13,
+        let mut assertions = vec![];
+        //check initial sender values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH + 2 {
+            assertions.push(Assertion::single(
+                SENDER_INITIAL_POS + i,
                 0,
-                self.s_inputs[13] + BaseElement::ONE,
-            ),
-            Assertion::single(RECEIVER_INITIAL_POS, 0, self.r_inputs[0]),
-            Assertion::single(RECEIVER_INITIAL_POS + 1, 0, self.r_inputs[1]),
-            Assertion::single(RECEIVER_INITIAL_POS + 2, 0, self.r_inputs[2]),
-            Assertion::single(RECEIVER_INITIAL_POS + 3, 0, self.r_inputs[3]),
-            Assertion::single(RECEIVER_INITIAL_POS + 4, 0, self.r_inputs[4]),
-            Assertion::single(RECEIVER_INITIAL_POS + 5, 0, self.r_inputs[5]),
-            Assertion::single(RECEIVER_INITIAL_POS + 6, 0, self.r_inputs[6]),
-            Assertion::single(RECEIVER_INITIAL_POS + 7, 0, self.r_inputs[7]),
-            Assertion::single(RECEIVER_INITIAL_POS + 8, 0, self.r_inputs[8]),
-            Assertion::single(RECEIVER_INITIAL_POS + 9, 0, self.r_inputs[9]),
-            Assertion::single(RECEIVER_INITIAL_POS + 10, 0, self.r_inputs[10]),
-            Assertion::single(RECEIVER_INITIAL_POS + 11, 0, self.r_inputs[11]),
-            Assertion::single(RECEIVER_INITIAL_POS + 12, 0, self.r_inputs[12]),
-            Assertion::single(RECEIVER_INITIAL_POS + 13, 0, self.r_inputs[13]),
-            Assertion::single(RECEIVER_UPDATED_POS, 0, self.r_inputs[0]),
-            Assertion::single(RECEIVER_UPDATED_POS + 1, 0, self.r_inputs[1]),
-            Assertion::single(RECEIVER_UPDATED_POS + 2, 0, self.r_inputs[2]),
-            Assertion::single(RECEIVER_UPDATED_POS + 3, 0, self.r_inputs[3]),
-            Assertion::single(RECEIVER_UPDATED_POS + 4, 0, self.r_inputs[4]),
-            Assertion::single(RECEIVER_UPDATED_POS + 5, 0, self.r_inputs[5]),
-            Assertion::single(RECEIVER_UPDATED_POS + 6, 0, self.r_inputs[6]),
-            Assertion::single(RECEIVER_UPDATED_POS + 7, 0, self.r_inputs[7]),
-            Assertion::single(RECEIVER_UPDATED_POS + 8, 0, self.r_inputs[8]),
-            Assertion::single(RECEIVER_UPDATED_POS + 9, 0, self.r_inputs[9]),
-            Assertion::single(RECEIVER_UPDATED_POS + 10, 0, self.r_inputs[10]),
-            Assertion::single(RECEIVER_UPDATED_POS + 11, 0, self.r_inputs[11]),
-            Assertion::single(RECEIVER_UPDATED_POS + 12, 0, self.r_inputs[12] + self.delta),
-            Assertion::single(RECEIVER_UPDATED_POS + 13, 0, self.r_inputs[13]),
-        ]
+                self.s_inputs[i],
+            ));
+        }
+
+        //check updated sender values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH {
+            assertions.push(Assertion::single(
+                SENDER_UPDATED_POS + i,
+                0,
+                self.s_inputs[i],
+            ));
+        }
+        assertions.push(Assertion::single(
+            SENDER_UPDATED_POS + AFFINE_POINT_WIDTH,
+            0,
+            self.s_inputs[AFFINE_POINT_WIDTH] - self.delta,
+        ));
+        assertions.push(Assertion::single(
+            SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1,
+            0,
+            self.s_inputs[AFFINE_POINT_WIDTH + 1] + BaseElement::ONE,
+        ));
+
+        //check initial receiver values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH + 2 {
+            assertions.push(Assertion::single(
+                RECEIVER_INITIAL_POS + i,
+                0,
+                self.r_inputs[i],
+            ));
+        }
+
+        //check updated receiver values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH {
+            assertions.push(Assertion::single(
+                RECEIVER_UPDATED_POS + i,
+                0,
+                self.r_inputs[i],
+            ));
+        }
+        assertions.push(Assertion::single(
+            RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH,
+            0,
+            self.r_inputs[AFFINE_POINT_WIDTH] + self.delta,
+        ));
+        assertions.push(Assertion::single(
+            RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 1,
+            0,
+            self.r_inputs[AFFINE_POINT_WIDTH + 1],
+        ));
+
+        assertions
     }
 
     fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {

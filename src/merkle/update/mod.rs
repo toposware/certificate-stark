@@ -11,7 +11,7 @@ use winterfell::{
 };
 
 pub mod constants;
-use constants::MERKLE_TREE_DEPTH;
+use constants::{HASH_RATE_WIDTH, MERKLE_TREE_DEPTH};
 mod trace;
 pub use trace::{build_trace, init_merkle_update_state, update_merkle_update_state};
 pub mod air;
@@ -96,7 +96,7 @@ impl TransactionExample {
         let final_root = self.tx_metadata.final_root.to_elements();
         let pub_inputs = PublicInputs {
             initial_root,
-            final_root: [final_root[0]; 7],
+            final_root: [final_root[0]; HASH_RATE_WIDTH],
         };
         winterfell::verify::<MerkleAir>(proof, pub_inputs)
     }

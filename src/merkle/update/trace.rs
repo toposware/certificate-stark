@@ -77,27 +77,31 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
 
 pub fn init_merkle_update_state(
     initial_root: rescue::Hash,
-    s_old_value: [BaseElement; 14],
-    r_old_value: [BaseElement; 14],
+    s_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
     state: &mut [BaseElement],
 ) {
     // Initialize the first row of any given transaction
     let init_root = initial_root.to_elements();
 
-    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + 14].copy_from_slice(&s_old_value);
+    state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + AFFINE_POINT_WIDTH + 2]
+        .copy_from_slice(&s_old_value);
     state[SENDER_BIT_POS] = BaseElement::ZERO;
-    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + 14].copy_from_slice(&s_old_value);
+    state[SENDER_UPDATED_POS..SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 2]
+        .copy_from_slice(&s_old_value);
     // Update sender's balance
-    state[SENDER_UPDATED_POS + 12] -= delta;
+    state[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH] -= delta;
     // Update sender's nonce
-    state[SENDER_UPDATED_POS + 13] += BaseElement::ONE;
+    state[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1] += BaseElement::ONE;
 
-    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + 14].copy_from_slice(&r_old_value);
+    state[RECEIVER_INITIAL_POS..RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH + 2]
+        .copy_from_slice(&r_old_value);
     state[RECEIVER_BIT_POS] = BaseElement::ZERO;
-    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + 14].copy_from_slice(&r_old_value);
+    state[RECEIVER_UPDATED_POS..RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 2]
+        .copy_from_slice(&r_old_value);
     // Update receivers's balance
-    state[RECEIVER_UPDATED_POS + 12] += delta;
+    state[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH] += delta;
 
     state[PREV_TREE_ROOT_POS..PREV_TREE_ROOT_POS + RATE_WIDTH].copy_from_slice(&init_root);
 }

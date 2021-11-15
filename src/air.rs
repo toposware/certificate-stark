@@ -12,7 +12,9 @@ use super::constants::merkle_const::{
 };
 use super::constants::range_const::RANGE_LOG;
 use super::constants::rescue_const::HASH_CYCLE_LENGTH;
-use super::constants::schnorr_const::{POINT_WIDTH, SIG_CYCLE_LENGTH};
+use super::constants::schnorr_const::{
+    AFFINE_POINT_WIDTH, PROJECTIVE_POINT_WIDTH, SIG_CYCLE_LENGTH,
+};
 use super::constants::{
     ARK_INDEX, DELTA_ACCUMULATE_POS, DELTA_BIT_POS, DELTA_COPY_POS, DELTA_COPY_RES,
     DELTA_RANGE_RES, DOUBLING_MASK_INDEX, FINISH_MASK_INDEX, HASH_INPUT_MASK_INDEX,
@@ -41,8 +43,8 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub initial_root: [BaseElement; 7],
-    pub final_root: [BaseElement; 7],
+    pub initial_root: [BaseElement; HASH_RATE_WIDTH],
+    pub final_root: [BaseElement; HASH_RATE_WIDTH],
 }
 
 impl Serializable for PublicInputs {
@@ -54,8 +56,8 @@ impl Serializable for PublicInputs {
 
 pub struct TransactionAir {
     context: AirContext<BaseElement>,
-    initial_root: [BaseElement; 7],
-    final_root: [BaseElement; 7],
+    initial_root: [BaseElement; HASH_RATE_WIDTH],
+    final_root: [BaseElement; HASH_RATE_WIDTH],
 }
 
 impl Air for TransactionAir {
@@ -268,9 +270,10 @@ impl Air for TransactionAir {
         ];
 
         // Update the constraint degrees with the ones for Schnorr
-        for index in 0..POINT_WIDTH {
+        for index in 0..PROJECTIVE_POINT_WIDTH {
             degrees[index] = schnorr_degrees[index].clone();
-            degrees[index + POINT_WIDTH + 1] = schnorr_degrees[index + POINT_WIDTH + 1].clone();
+            degrees[index + PROJECTIVE_POINT_WIDTH + 1] =
+                schnorr_degrees[index + PROJECTIVE_POINT_WIDTH + 1].clone();
         }
 
         // Append the degrees for the copy columns followed by range proof equalities
@@ -566,7 +569,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
 ) {
     merkle::init::evaluate_constraints(result, current, next, ark, transaction_setup_flag);
     // Enforce no change in registers representing keys
-    for i in 0..12 {
+    for i in 0..AFFINE_POINT_WIDTH {
         result.agg_constraint(
             VALUE_CONSTRAINT_RES + i,
             transaction_setup_flag,
@@ -577,7 +580,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         );
 
         result.agg_constraint(
-            VALUE_CONSTRAINT_RES + 12 + i,
+            VALUE_CONSTRAINT_RES + AFFINE_POINT_WIDTH + i,
             transaction_setup_flag,
             are_equal(
                 current[RECEIVER_INITIAL_POS + i],
@@ -587,11 +590,11 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     }
     // Enforce no change in the receiver's nonce
     result.agg_constraint(
-        VALUE_CONSTRAINT_RES + 24,
+        VALUE_CONSTRAINT_RES + AFFINE_POINT_WIDTH * 2,
         transaction_setup_flag,
         are_equal(
-            current[RECEIVER_INITIAL_POS + 13],
-            current[RECEIVER_UPDATED_POS + 13],
+            current[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH + 1],
+            current[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 1],
         ),
     );
     // Enforce that the change in balances cancels out
@@ -599,8 +602,10 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         BALANCE_CONSTRAINT_RES,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_INITIAL_POS + 12] - current[SENDER_UPDATED_POS + 12],
-            current[RECEIVER_UPDATED_POS + 12] - current[RECEIVER_INITIAL_POS + 12],
+            current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH]
+                - current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH],
+            current[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH]
+                - current[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH],
         ),
     );
     // Enforce change in the sender's nonce
@@ -608,8 +613,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         NONCE_UPDATE_CONSTRAINT_RES,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_UPDATED_POS + 13],
-            current[SENDER_INITIAL_POS + 13] + E::ONE,
+            current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1],
+            current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH + 1] + E::ONE,
         ),
     );
 
@@ -626,7 +631,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             RECEIVER_KEY_POINT_POS,
         ),
     ] {
-        for offset in 0..12 {
+        for offset in 0..AFFINE_POINT_WIDTH {
             result.agg_constraint(
                 res_index + offset,
                 transaction_setup_flag,
@@ -640,13 +645,22 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         transaction_setup_flag,
         are_equal(
             next[DELTA_COPY_POS],
-            current[SENDER_INITIAL_POS + 12] - current[SENDER_UPDATED_POS + 12],
+            current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH]
+                - current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH],
         ),
     );
     // Enforce proper copying of sigma and the nonce
     for (res_index, origin_index, copy_index) in [
-        (SIGMA_COPY_RES, SENDER_UPDATED_POS + 12, SIGMA_COPY_POS),
-        (NONCE_COPY_RES, SENDER_INITIAL_POS + 13, NONCE_COPY_POS),
+        (
+            SIGMA_COPY_RES,
+            SENDER_UPDATED_POS + AFFINE_POINT_WIDTH,
+            SIGMA_COPY_POS,
+        ),
+        (
+            NONCE_COPY_RES,
+            SENDER_INITIAL_POS + AFFINE_POINT_WIDTH + 1,
+            NONCE_COPY_POS,
+        ),
     ] {
         result.agg_constraint(
             res_index,
@@ -660,7 +674,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         (SENDER_KEY_POINT_RES, SENDER_KEY_POINT_POS),
         (RECEIVER_KEY_POINT_RES, RECEIVER_KEY_POINT_POS),
     ] {
-        for offset in 0..12 {
+        for offset in 0..AFFINE_POINT_WIDTH {
             result.agg_constraint(
                 res_index + offset,
                 copy_values_flag,
@@ -695,15 +709,15 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     let mut hash_internal_inputs = [E::ZERO; HASH_RATE_WIDTH];
     for k in 0..schnorr::constants::NUM_HASH_ITER - 1 {
         for i in 0..HASH_RATE_WIDTH {
-            let from_sender = k * HASH_RATE_WIDTH + i < 12;
-            let from_receiver = !from_sender && (k * HASH_RATE_WIDTH + i < 24);
-            let from_delta = k * HASH_RATE_WIDTH + i == 24;
-            let from_nonce = k * HASH_RATE_WIDTH + i == 25;
+            let from_sender = k * HASH_RATE_WIDTH + i < AFFINE_POINT_WIDTH;
+            let from_receiver = !from_sender && (k * HASH_RATE_WIDTH + i < AFFINE_POINT_WIDTH * 2);
+            let from_delta = k * HASH_RATE_WIDTH + i == AFFINE_POINT_WIDTH * 2;
+            let from_nonce = k * HASH_RATE_WIDTH + i == AFFINE_POINT_WIDTH * 2 + 1;
 
             let cell = if from_sender {
                 next[SENDER_KEY_POINT_POS + k * HASH_RATE_WIDTH + i]
             } else if from_receiver {
-                next[RECEIVER_KEY_POINT_POS + k * HASH_RATE_WIDTH + i - 12]
+                next[RECEIVER_KEY_POINT_POS + k * HASH_RATE_WIDTH + i - AFFINE_POINT_WIDTH]
             } else if from_delta {
                 next[DELTA_COPY_POS]
             } else if from_nonce {
@@ -723,7 +737,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         ark,
         doubling_flag,
         addition_flag,
-        &next[SENDER_KEY_POINT_POS..SENDER_KEY_POINT_POS + 12],
+        &next[SENDER_KEY_POINT_POS..SENDER_KEY_POINT_POS + AFFINE_POINT_WIDTH],
         final_point_addition_flag,
         schnorr_hash_flag,
         copy_hash_flag,

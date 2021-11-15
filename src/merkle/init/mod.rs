@@ -15,6 +15,7 @@ pub use air::{evaluate_constraints, periodic_columns};
 use air::{PreMerkleAir, PublicInputs};
 
 pub mod constants;
+use constants::AFFINE_POINT_WIDTH;
 mod trace;
 pub use trace::{
     build_trace, init_merkle_initialization_state, update_merkle_initialization_state,
@@ -43,16 +44,16 @@ pub fn get_example() -> PreMerkleExample {
 
 pub struct PreMerkleExample {
     options: ProofOptions,
-    s_inputs: [BaseElement; 14],
-    r_inputs: [BaseElement; 14],
+    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
 }
 
 impl PreMerkleExample {
     pub fn new(options: ProofOptions) -> PreMerkleExample {
         // Sender and receiver inputs are 4 BaseElement s, namely: 2 for the pk, 1 for the $, and 1 for the nonce
-        let s_inputs = [BaseElement::ZERO; 14];
-        let r_inputs = [BaseElement::ZERO; 14];
+        let s_inputs = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
+        let r_inputs = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
         let delta = BaseElement::ONE;
 
         PreMerkleExample {
