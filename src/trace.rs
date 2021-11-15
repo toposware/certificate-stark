@@ -11,7 +11,7 @@ use super::utils::rescue;
 use super::TransactionMetadata;
 use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
 use winterfell::{
-    math::{curve::Scalar, fields::cheetah::BaseElement},
+    math::{curves::curve_f63::Scalar, fields::f63::BaseElement},
     ExecutionTrace,
 };
 

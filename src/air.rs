@@ -34,7 +34,7 @@ use super::utils::{
 };
 use crate::utils::{are_equal, not, EvaluationResult};
 use winterfell::{
-    math::{fields::cheetah::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };

@@ -8,7 +8,7 @@ use super::{ecc, field, rescue};
 use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
 use core::cmp::Ordering;
 use winterfell::{
-    math::{curve::Scalar, fields::cheetah::BaseElement, FieldElement},
+    math::{curves::curve_f63::Scalar, fields::f63::BaseElement, FieldElement},
     ExecutionTrace,
 };
 

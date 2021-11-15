@@ -7,7 +7,7 @@ use super::{are_equal, EvaluationResult};
 use core::slice;
 use winterfell::{
     crypto::{Digest, Hasher},
-    math::{fields::cheetah::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     ByteReader, ByteWriter, Deserializable, DeserializationError, Serializable,
 };
 

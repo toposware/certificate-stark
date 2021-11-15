@@ -7,7 +7,7 @@ use super::constants::*;
 use crate::utils::rescue::{self, HASH_CYCLE_MASK};
 use crate::utils::{are_equal, is_binary, not, EvaluationResult};
 use winterfell::{
-    math::{fields::cheetah::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };

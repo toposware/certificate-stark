@@ -5,7 +5,7 @@
 
 use super::constants::*;
 use winterfell::{
-    math::{fields::cheetah::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     ExecutionTrace,
 };
 

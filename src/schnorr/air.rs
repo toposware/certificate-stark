@@ -9,7 +9,7 @@ use super::rescue::{RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WID
 use super::{ecc, field, rescue};
 use crate::utils::{are_equal, is_zero, not, EvaluationResult};
 use winterfell::{
-    math::{curve::Scalar, fields::cheetah::BaseElement, FieldElement},
+    math::{curves::curve_f63::Scalar, fields::f63::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };

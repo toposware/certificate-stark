@@ -10,8 +10,8 @@ use std::time::Instant;
 use winterfell::{
     crypto::Hasher,
     math::{
-        curve::{AffinePoint, Scalar},
-        fields::cheetah::BaseElement,
+        curves::curve_f63::{AffinePoint, Scalar},
+        fields::f63::BaseElement,
         log2, FieldElement,
     },
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,

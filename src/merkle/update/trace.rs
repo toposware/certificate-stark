@@ -7,7 +7,7 @@ use super::constants::*;
 use crate::utils::rescue::{self, RATE_WIDTH};
 use crate::TransactionMetadata;
 use winterfell::{
-    math::{fields::cheetah::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     ExecutionTrace,
 };
 

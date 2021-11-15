@@ -6,7 +6,7 @@
 use log::debug;
 use std::time::Instant;
 use winterfell::{
-    math::{fields::cheetah::BaseElement, log2, FieldElement},
+    math::{fields::f63::BaseElement, log2, FieldElement},
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 

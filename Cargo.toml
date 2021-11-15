@@ -23,15 +23,14 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 log = { version = "0.4", default-features = false }
 rand_core = { version = "0.6", default-features = false }
 schnorr-sig = { git = "https://github.com/ToposWare/schnorr-sig.git", default-features = false }
-stark-curve = { git = "https://github.com/ToposWare/stark-curve.git", default-features = false }
-winterfell = { git = "https://github.com/ToposWare/winterfell.git", branch = "schnorr-cheetah", default-features = false }
+winterfell = { git = "https://github.com/ToposWare/winterfell.git", branch = "cheetah", default-features = false }
 
 
 [features]
 concurrent = ["winterfell/concurrent", "std"]
 default = ["std", "serialize"]
 std = ["winterfell/std"]
-serialize = ["schnorr-sig/serialize", "stark-curve/serialize"]
+serialize = ["schnorr-sig/serialize"]
 
 [dev-dependencies]
 env_logger = "0.9"

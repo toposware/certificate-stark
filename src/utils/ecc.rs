@@ -4,7 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::{are_equal, is_binary, not, EvaluationResult};
-use winterfell::math::{fields::cheetah::BaseElement, FieldElement};
+use winterfell::math::{fields::f63::BaseElement, FieldElement};
 
 // CONSTANTS
 // ================================================================================================

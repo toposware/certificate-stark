@@ -24,8 +24,8 @@ use utils::rescue::Hash;
 use winterfell::{
     crypto::{Digest, Hasher, MerkleTree},
     math::{
-        curve::{AffinePoint, Scalar},
-        fields::cheetah::BaseElement,
+        curves::curve_f63::{AffinePoint, Scalar},
+        fields::f63::BaseElement,
         log2, FieldElement, StarkField,
     },
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
