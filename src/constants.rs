@@ -19,7 +19,7 @@ pub mod range_const {
 }
 
 pub mod rescue_const {
-    pub use crate::utils::rescue::{HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS};
+    pub use crate::utils::rescue::{HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS, RATE_WIDTH};
 }
 
 pub mod schnorr_const {
