@@ -31,11 +31,11 @@ use schnorr_const::{
 // The trace is composed as follows:
 // (note that sigma here refers to sender_balance - delta)
 //
-// | 4 * HASH_STATE + 4 |          5          | number of registers
-// |    merkle::init    | copy_keys_and_sigma | sub-programs
-// |   merkle::update   | copy_keys_and_sigma |
-// |   schnorr::init    | copy_keys_and_sigma |
-// |   schnorr::verif   |  range_proof_sigma  |
+// | 4 * HASH_STATE + 4 |      2 * AFF_POINT + 3      | number of registers
+// |    merkle::init    | copy_keys_delta_sigma_nonce | sub-programs
+// |   merkle::update   | copy_keys_delta_sigma_nonce |
+// |   schnorr::init    | copy_keys_delta_sigma_nonce |
+// |   schnorr::verif   | range_proof_delta_and_sigma |
 #[allow(clippy::too_many_arguments)]
 pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
     let initial_roots = &tx_metadata.initial_roots;
@@ -128,7 +128,7 @@ pub fn init_transaction_state(
         &mut state[..merkle_const::TRACE_WIDTH],
     );
 
-    // Copy public keys and sigma = balance_sender - delta
+    // Copy public keys, delta, sigma = balance_sender - delta, and nonce
     let start_copy_index = merkle_const::TRACE_WIDTH;
     state[start_copy_index..start_copy_index + AFFINE_POINT_WIDTH]
         .copy_from_slice(&s_old_value[0..AFFINE_POINT_WIDTH]);
