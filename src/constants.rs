@@ -109,17 +109,23 @@ pub const SCHNORR_MASK_INDEX: usize = 5;
 pub const SCALAR_MULT_MASK_INDEX: usize = 6;
 /// The index for the point doubling mask
 pub const DOUBLING_MASK_INDEX: usize = 7;
-/// The index for the Schnorr hash mask
+/// The index for the overall Schnorr hash mask
 pub const SCHNORR_HASH_MASK_INDEX: usize = 8;
+/// The index for the Schnorr hash round mask
+pub const SCHNORR_HASH_ROUND_MASK_INDEX: usize = 9;
 /// The starting index for the flags for copying parts to the hash internal inputs
-pub const HASH_INTERNAL_INPUT_MASKS_INDEX: usize = 9;
+pub const HASH_INTERNAL_INPUT_MASKS_INDEX: usize = 10;
+/// The index for the mask specifying range proof initilization
+pub const RANGE_PROOF_SETUP_MASK_INDEX: usize = 13;
 /// The index for the mask specifying range proof computations
-pub const RANGE_PROOF_STEP_MASK_INDEX: usize = 12;
+pub const RANGE_PROOF_STEP_MASK_INDEX: usize = 14;
 /// The index for the mask checking final range proof equality
-pub const RANGE_PROOF_FINISH_MASK_INDEX: usize = 13;
+pub const DELTA_RANGE_FINISH_MASK_INDEX: usize = 15;
+/// The index for the mask checking final range proof equality
+pub const SIGMA_RANGE_FINISH_MASK_INDEX: usize = 16;
 /// The index for the mask checking carry-over of values from Merkle to Schnorr
-pub const VALUE_COPY_MASK_INDEX: usize = 14;
+pub const VALUE_COPY_MASK_INDEX: usize = 17;
 /// The index for the mask enforcing proper setup of the Schnorr component
-pub const SCHNORR_SETUP_MASK_INDEX: usize = 15;
+pub const SCHNORR_SETUP_MASK_INDEX: usize = 18;
 /// The starting index for the Rescue round constants
-pub const ARK_INDEX: usize = 16;
+pub const ARK_INDEX: usize = 19;

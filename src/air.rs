@@ -10,22 +10,23 @@ use super::constants::merkle_const::{
     VALUE_CONSTRAINT_RES,
 };
 use super::constants::range_const::RANGE_LOG;
-use super::constants::rescue_const::HASH_CYCLE_LENGTH;
+use super::constants::rescue_const::{HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS};
 use super::constants::schnorr_const::{
-    HP_POINT_POS, H_FIELD_POS, POINT_WIDTH, SIG_CYCLE_LENGTH, SIG_HASH_POS, S_POINT_POS,
+    HP_POINT_POS, H_FIELD_POS, NUM_HASH_ITER, POINT_WIDTH, SIG_CYCLE_LENGTH, SIG_HASH_POS,
+    S_POINT_POS,
 };
 use super::constants::{
     ARK_INDEX, DELTA_ACCUMULATE_POS, DELTA_BIT_POS, DELTA_COPY_POS, DELTA_COPY_RES,
-    DELTA_RANGE_RES, DELTA_SETUP_RES, DOUBLING_MASK_INDEX, FINISH_MASK_INDEX,
-    HASH_INPUT_MASK_INDEX, HASH_INTERNAL_INPUT_MASKS_INDEX, HASH_MASK_INDEX, HP_POINT_SETUP_RES,
-    H_FIELD_SETUP_RES, MERKLE_MASK_INDEX, NONCE_COPY_POS, NONCE_COPY_RES,
-    RANGE_PROOF_FINISH_MASK_INDEX, RANGE_PROOF_STEP_MASK_INDEX, RECEIVER_KEY_POINT_POS,
+    DELTA_RANGE_FINISH_MASK_INDEX, DELTA_RANGE_RES, DELTA_SETUP_RES, DOUBLING_MASK_INDEX,
+    FINISH_MASK_INDEX, HASH_INPUT_MASK_INDEX, HASH_INTERNAL_INPUT_MASKS_INDEX, HASH_MASK_INDEX,
+    HP_POINT_SETUP_RES, H_FIELD_SETUP_RES, MERKLE_MASK_INDEX, NONCE_COPY_POS, NONCE_COPY_RES,
+    RANGE_PROOF_SETUP_MASK_INDEX, RANGE_PROOF_STEP_MASK_INDEX, RECEIVER_KEY_POINT_POS,
     RECEIVER_KEY_POINT_RES, RX_COPY_POS, RX_COPY_RES, SCALAR_MULT_MASK_INDEX,
-    SCHNORR_HASH_MASK_INDEX, SCHNORR_HASH_POS, SCHNORR_MASK_INDEX, SCHNORR_REGISTER_WIDTH,
-    SCHNORR_SETUP_MASK_INDEX, SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES, SETUP_MASK_INDEX,
-    SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES, SIGMA_RANGE_RES,
-    SIGMA_SETUP_RES, SIG_HASH_SETUP_RES, S_POINT_SETUP_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH,
-    VALUE_COPY_MASK_INDEX,
+    SCHNORR_HASH_MASK_INDEX, SCHNORR_HASH_POS, SCHNORR_HASH_ROUND_MASK_INDEX, SCHNORR_MASK_INDEX,
+    SCHNORR_REGISTER_WIDTH, SCHNORR_SETUP_MASK_INDEX, SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES,
+    SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES,
+    SIGMA_RANGE_FINISH_MASK_INDEX, SIGMA_RANGE_RES, SIGMA_SETUP_RES, SIG_HASH_SETUP_RES,
+    S_POINT_SETUP_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
 };
 use super::merkle;
 use super::schnorr;
@@ -195,15 +196,18 @@ impl Air for TransactionAir {
         let scalar_mult_flag = periodic_values[SCALAR_MULT_MASK_INDEX];
         let doubling_flag = periodic_values[DOUBLING_MASK_INDEX];
         let schnorr_hash_flag = periodic_values[SCHNORR_HASH_MASK_INDEX];
+        let schnorr_hash_round_flag = periodic_values[SCHNORR_HASH_ROUND_MASK_INDEX];
         let hash_internal_input_flags =
             &periodic_values[HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3];
+        let range_proof_setup_flag = periodic_values[RANGE_PROOF_SETUP_MASK_INDEX];
         let range_proof_flag = periodic_values[RANGE_PROOF_STEP_MASK_INDEX];
-        let range_proof_finish_flag = periodic_values[RANGE_PROOF_FINISH_MASK_INDEX];
+        let delta_range_finish_flag = periodic_values[DELTA_RANGE_FINISH_MASK_INDEX];
+        let sigma_range_finish_flag = periodic_values[SIGMA_RANGE_FINISH_MASK_INDEX];
         let copy_values_flag = periodic_values[VALUE_COPY_MASK_INDEX];
         let ark = &periodic_values[ARK_INDEX..];
 
         // Generate dependent masks from existing masks
-        let copy_hash_flag = not(schnorr_hash_flag) * schnorr_mask;
+        let copy_hash_flag = not(schnorr_hash_round_flag) * schnorr_hash_flag;
         let final_point_addition_flag = not(scalar_mult_flag) * schnorr_mask;
         let addition_flag = not(doubling_flag) * scalar_mult_flag;
         let copy_rx_flag = not(schnorr_setup_flag + final_point_addition_flag) * schnorr_mask;
@@ -225,8 +229,10 @@ impl Air for TransactionAir {
             copy_hash_flag,
             hash_internal_input_flags,
             copy_rx_flag,
+            range_proof_setup_flag,
             range_proof_flag,
-            range_proof_finish_flag,
+            delta_range_finish_flag,
+            sigma_range_finish_flag,
             copy_values_flag,
         )
     }
@@ -275,7 +281,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             SCHNORR_MASK_INDEX,
             SCALAR_MULT_MASK_INDEX,
             DOUBLING_MASK_INDEX,
-            SCHNORR_HASH_MASK_INDEX,
+            SCHNORR_HASH_ROUND_MASK_INDEX,
         ]
         .into_iter()
         .enumerate()
@@ -301,18 +307,39 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             .enumerate()
             .collect(),
     );
+    // Create a column for the overall Schnorr hash mask (to stop hash copying when range proofs are being done)
+    let hash_mask_len = HASH_CYCLE_LENGTH * (NUM_HASH_ITER - 1) + NUM_HASH_ROUNDS;
+    stitch(
+        &mut columns,
+        vec![vec![BaseElement::ONE; hash_mask_len]],
+        vec![(0, SCHNORR_HASH_MASK_INDEX)],
+    );
 
     // Add the columns for the range proof component
     let range_proof_mask = vec![BaseElement::ONE; RANGE_LOG];
-    let mut range_proof_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
-    range_proof_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
+    let mut range_proof_setup_mask = vec![BaseElement::ZERO; RANGE_LOG];
+    let mut delta_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
+    let mut sigma_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
+    range_proof_setup_mask[0] = BaseElement::ONE;
+    delta_range_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
+    sigma_range_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
     stitch(
         &mut columns,
-        vec![range_proof_mask, range_proof_finish_mask],
-        vec![RANGE_PROOF_STEP_MASK_INDEX, RANGE_PROOF_FINISH_MASK_INDEX]
-            .into_iter()
-            .enumerate()
-            .collect(),
+        vec![
+            range_proof_setup_mask,
+            range_proof_mask,
+            delta_range_finish_mask,
+            sigma_range_finish_mask,
+        ],
+        vec![
+            RANGE_PROOF_SETUP_MASK_INDEX,
+            RANGE_PROOF_STEP_MASK_INDEX,
+            DELTA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_FINISH_MASK_INDEX,
+        ]
+        .into_iter()
+        .enumerate()
+        .collect(),
     );
 
     length += SIG_CYCLE_LENGTH - 1;
@@ -344,8 +371,11 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             SCALAR_MULT_MASK_INDEX,
             DOUBLING_MASK_INDEX,
             SCHNORR_HASH_MASK_INDEX,
+            SCHNORR_HASH_ROUND_MASK_INDEX,
+            RANGE_PROOF_SETUP_MASK_INDEX,
             RANGE_PROOF_STEP_MASK_INDEX,
-            RANGE_PROOF_FINISH_MASK_INDEX,
+            DELTA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_FINISH_MASK_INDEX,
             VALUE_COPY_MASK_INDEX,
         ],
         length,
@@ -388,8 +418,11 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             SCALAR_MULT_MASK_INDEX,
             DOUBLING_MASK_INDEX,
             SCHNORR_HASH_MASK_INDEX,
+            SCHNORR_HASH_ROUND_MASK_INDEX,
+            RANGE_PROOF_SETUP_MASK_INDEX,
             RANGE_PROOF_STEP_MASK_INDEX,
-            RANGE_PROOF_FINISH_MASK_INDEX,
+            DELTA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_FINISH_MASK_INDEX,
             VALUE_COPY_MASK_INDEX,
         ],
         length,
@@ -422,8 +455,10 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     copy_hash_flag: E,
     hash_internal_input_flags: &[E],
     copy_rx_flag: E,
+    range_proof_setup_flag: E,
     range_proof_flag: E,
-    range_proof_finish_flag: E,
+    delta_range_finish_flag: E,
+    sigma_range_finish_flag: E,
     copy_values_flag: E,
 ) {
     // Enforce no change in registers representing keys
@@ -568,7 +603,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     hash_internal_inputs[0] += hash_internal_input_flags[2] * next[DELTA_COPY_POS];
     hash_internal_inputs[1] += hash_internal_input_flags[2] * next[NONCE_COPY_POS];
 
-    // Enforce proper setup of the inouts for the Schnorr component
+    // Enforce proper setup of the inputs for the Schnorr component
     // Enforce that the first and second points start at infinity
     for (point_setup_res, point_pos) in [
         (S_POINT_SETUP_RES, S_POINT_POS),
@@ -627,12 +662,12 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     // Enforce proper setup of the range proofs
     result.agg_constraint(
         DELTA_SETUP_RES,
-        schnorr_setup_flag,
+        range_proof_setup_flag,
         are_equal(current[DELTA_ACCUMULATE_POS], E::ZERO),
     );
     result.agg_constraint(
         SIGMA_SETUP_RES,
-        schnorr_setup_flag,
+        range_proof_setup_flag,
         are_equal(current[SIGMA_ACCUMULATE_POS], E::ZERO),
     );
     // Enforce constraints for the range proofs
@@ -655,12 +690,12 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     // Enforce that the values at the ends of the range proofs are actually the values promised
     result.agg_constraint(
         DELTA_RANGE_RES,
-        range_proof_finish_flag,
+        delta_range_finish_flag,
         are_equal(next[DELTA_ACCUMULATE_POS], next[DELTA_COPY_POS]),
     );
     result.agg_constraint(
         SIGMA_RANGE_RES,
-        range_proof_finish_flag,
+        sigma_range_finish_flag,
         are_equal(next[SIGMA_ACCUMULATE_POS], next[SIGMA_COPY_POS]),
     );
     // Enforce that the purported x component of T matches the computed one
