@@ -80,13 +80,13 @@ pub const SCHNORR_REGISTER_WIDTH: usize = schnorr_const::TRACE_WIDTH;
 /// Poaition of the beginning of the hash state for Schnorr signature
 pub const SCHNORR_HASH_POS: usize = 2 * schnorr_const::POINT_WIDTH + 3;
 /// Position of the bit decomposition of delta
-pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH;
+pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH - 2;
 /// Position of the accumulated value for delta
-pub const DELTA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 1;
+pub const DELTA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH - 1;
 /// Position of the bit decomposition of sigma
-pub const SIGMA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH + 2;
-/// Position of the accumulated value for delta
-pub const SIGMA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 3;
+pub const SIGMA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH - 2;
+/// Position of the accumulated value for sigma
+pub const SIGMA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH - 1;
 
 /// Total length for verifying a transaction
 // Dominated by the Merkle authentication paths and the Schnorr signature verification

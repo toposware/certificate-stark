@@ -316,18 +316,30 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     );
 
     // Add the columns for the range proof component
-    let range_proof_mask = vec![BaseElement::ONE; RANGE_LOG];
-    let mut range_proof_setup_mask = vec![BaseElement::ZERO; RANGE_LOG];
+    pad(
+        &mut columns,
+        vec![
+            RANGE_PROOF_SETUP_MASK_INDEX,
+            RANGE_PROOF_STEP_MASK_INDEX,
+            DELTA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_FINISH_MASK_INDEX,
+        ],
+        length + hash_mask_len + 1,
+        BaseElement::ZERO,
+    );
+    let mut range_proof_setup_mask = vec![BaseElement::ZERO; RANGE_LOG + 1];
+    let mut range_proof_mask = vec![BaseElement::ONE; RANGE_LOG + 1];
     let mut delta_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
-    let mut sigma_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
+    let mut sigma_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG * 2 + 1];
     range_proof_setup_mask[0] = BaseElement::ONE;
+    range_proof_mask[RANGE_LOG] = BaseElement::ZERO;
     delta_range_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
-    sigma_range_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
+    sigma_range_finish_mask[RANGE_LOG * 2] = BaseElement::ONE;
     stitch(
         &mut columns,
         vec![
-            range_proof_setup_mask,
-            range_proof_mask,
+            range_proof_setup_mask.clone(),
+            range_proof_mask.clone(),
             delta_range_finish_mask,
             sigma_range_finish_mask,
         ],
@@ -336,6 +348,20 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             RANGE_PROOF_STEP_MASK_INDEX,
             DELTA_RANGE_FINISH_MASK_INDEX,
             SIGMA_RANGE_FINISH_MASK_INDEX,
+        ]
+        .into_iter()
+        .enumerate()
+        .collect(),
+    );
+    stitch(
+        &mut columns,
+        vec![
+            range_proof_setup_mask,
+            range_proof_mask,
+        ],
+        vec![
+            RANGE_PROOF_SETUP_MASK_INDEX,
+            RANGE_PROOF_STEP_MASK_INDEX,
         ]
         .into_iter()
         .enumerate()
@@ -617,7 +643,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             );
         }
     }
-    // Enforce that the vomputation of h in the field starts with 0
+    // Enforce that the computation of h in the field starts with 0
     result.agg_constraint(
         H_FIELD_SETUP_RES,
         schnorr_setup_flag,
@@ -665,6 +691,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         range_proof_setup_flag,
         are_equal(current[DELTA_ACCUMULATE_POS], E::ZERO),
     );
+    // TODO: Remove duplicate constraint
     result.agg_constraint(
         SIGMA_SETUP_RES,
         range_proof_setup_flag,
@@ -679,6 +706,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         DELTA_BIT_POS,
         range_proof_flag,
     );
+    // TODO: Remove duplicate constraint
     enforce_double_and_add_step(
         result,
         current,

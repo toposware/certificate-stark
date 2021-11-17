@@ -125,11 +125,6 @@ pub fn init_transaction_state(
     state: &mut [BaseElement],
 ) {
     schnorr::init_sig_verification_state(signature, &mut state[..schnorr_const::TRACE_WIDTH]);
-    // We set the 4 registers next to the Schnorr signature sub-trace to zero, for computing
-    // the range proofs on delta and sigma = sender_balance - delta
-    let start_range_index = schnorr_const::TRACE_WIDTH;
-    range::init_range_verification_state(&mut state[start_range_index..start_range_index + 2]);
-    range::init_range_verification_state(&mut state[start_range_index + 2..start_range_index + 4]);
     state[RX_COPY_POS] = signature.0;
 
     // Set the initial root
@@ -171,8 +166,11 @@ pub fn update_transaction_state(
     state: &mut [BaseElement],
 ) {
     let schnorr_update_flag = step < SCHNORR_LENGTH - 1;
+    let hash_mask_len = rescue_const::HASH_CYCLE_LENGTH * (schnorr_const::NUM_HASH_ITER - 1) + rescue_const:: NUM_HASH_ROUNDS;
+    let range_proof_setup_flag = step == hash_mask_len;
+    let range_proof_flag = step > hash_mask_len && step <= hash_mask_len + 2 * (1 + range::RANGE_LOG);
     let merkle_init_flag = step == SCHNORR_LENGTH - 1;
-    let merkle_update_flag = !merkle_init_flag && step < SCHNORR_LENGTH + MERKLE_UPDATE_LENGTH;
+    let merkle_update_flag = step >= SCHNORR_LENGTH && step < SCHNORR_LENGTH + MERKLE_UPDATE_LENGTH;
 
     // Initialize Schnorr signature verification state
     if schnorr_update_flag {
@@ -186,28 +184,39 @@ pub fn update_transaction_state(
             sig_hash_bits,
             &mut state[..schnorr_const::TRACE_WIDTH],
         );
-
-        if schnorr_step < range::RANGE_LOG {
-            // Compute the range proof on delta and sigma
-            let start_range_index = schnorr_const::TRACE_WIDTH;
+    }
+    if range_proof_setup_flag {
+        // We set the 2 last registers of the Schnorr signature sub-trace to zero after the hash is done, for computing
+        // the range proof on delta
+        range::init_range_verification_state(&mut state[DELTA_BIT_POS..DELTA_ACCUMULATE_POS + 1]);
+    } else if range_proof_flag {
+        let range_step = step - hash_mask_len - 1;
+        if range_step < range::RANGE_LOG {
+            // Compute the range proof on delta
             range::update_range_verification_state(
-                schnorr_step,
+                range_step,
                 range_const::RANGE_LOG,
                 delta_bits,
-                &mut state[start_range_index..start_range_index + 2],
+                &mut state[DELTA_BIT_POS..DELTA_ACCUMULATE_POS + 1],
             );
-            range::update_range_verification_state(
-                schnorr_step,
-                range_const::RANGE_LOG,
-                sigma_bits,
-                &mut state[start_range_index + 2..start_range_index + 4],
-            );
-        } else {
+        } else if range_step == range::RANGE_LOG {
             debug_assert_eq!(
                 state[DELTA_ACCUMULATE_POS], state[DELTA_COPY_POS],
                 "expected accumulated value for delta of {}, found {}",
                 state[DELTA_COPY_POS], state[DELTA_ACCUMULATE_POS],
             );
+            // We set the 2 last registers of the Schnorr signature sub-trace to zero after the hash is done, for computing
+            // the range proof on sigma = sender_balance - delta
+            range::init_range_verification_state(&mut state[SIGMA_BIT_POS..SIGMA_ACCUMULATE_POS + 1]);
+        } else if range_step < 2 * range::RANGE_LOG + 1 {
+            // Compute the range proof on sigma
+            range::update_range_verification_state(
+                range_step - range::RANGE_LOG - 1,
+                range_const::RANGE_LOG,
+                sigma_bits,
+                &mut state[SIGMA_BIT_POS..SIGMA_ACCUMULATE_POS + 1],
+            );
+        } else {
             debug_assert_eq!(
                 state[SIGMA_ACCUMULATE_POS], state[SIGMA_COPY_POS],
                 "expected accumulated value for sigma of {}, found {}",
