@@ -689,7 +689,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result.agg_constraint(
         SIGMA_RANGE_RES,
         range_proof_finish_flag,
-        are_equal(next[DELTA_ACCUMULATE_POS], next[DELTA_COPY_POS]),
+        are_equal(next[SIGMA_ACCUMULATE_POS], next[SIGMA_COPY_POS]),
     );
     // Enforce that the purported x component of T matches the computed one
     result.agg_constraint(
