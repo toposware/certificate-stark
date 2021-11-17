@@ -199,10 +199,10 @@ fn compute_double<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
     let t2 = square_fp6(self_z);
 
     let t3 = mul_fp6(self_x, self_y);
-    let t3 = add_fp6(&t3, &t3);
+    let t3 = double_fp6(&t3);
     let z3 = mul_fp6(self_x, self_z);
 
-    let z3 = add_fp6(&z3, &z3);
+    let z3 = double_fp6(&z3);
     let y3 = mul_fp6(&b3, &t2);
 
     let y3 = add_fp6(&z3, &y3);
@@ -216,7 +216,7 @@ fn compute_double<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
     let t3 = sub_fp6(&t0, &t2);
 
     let t3 = add_fp6(&t3, &z3);
-    let z3 = add_fp6(&t0, &t0);
+    let z3 = double_fp6(&t0);
     let t0 = add_fp6(&z3, &t0);
 
     let t0 = add_fp6(&t0, &t2);
@@ -224,14 +224,14 @@ fn compute_double<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
     let y3 = add_fp6(&y3, &t0);
 
     let t2 = mul_fp6(self_y, self_z);
-    let t2 = add_fp6(&t2, &t2);
+    let t2 = double_fp6(&t2);
     let t0 = mul_fp6(&t2, &t3);
 
     let x3 = sub_fp6(&x3, &t0);
     let z3 = mul_fp6(&t2, &t1);
-    let z3 = add_fp6(&z3, &z3);
+    let z3 = double_fp6(&z3);
 
-    let z3 = add_fp6(&z3, &z3);
+    let z3 = double_fp6(&z3);
 
     state[0..POINT_COORDINATE_WIDTH].copy_from_slice(&x3);
     state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&y3);
@@ -300,7 +300,7 @@ fn compute_add<E: FieldElement + From<BaseElement>>(state: &mut [E], point: &[E]
     let z3 = add_fp6(&t1, &z3);
     let y3 = mul_fp6(&x3, &z3);
 
-    let t1 = add_fp6(&t0, &t0);
+    let t1 = double_fp6(&t0);
     let t1 = add_fp6(&t1, &t0);
 
     let t4 = mul_fp6(&b3, &t4);
@@ -336,7 +336,7 @@ pub fn square_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
     let tmp = self_c0.sub(self_c1);
     let tmp = (&tmp).square();
 
-    let c0 = (&bb).add(bb);
+    let c0 = (&bb).double();
     let c0 = (&c0).add(aa);
 
     let c1 = (&bb).add(c0);
@@ -360,7 +360,7 @@ pub fn mul_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] 
     let tmp2 = other_c1.sub(other_c0);
     let tmp = (&tmp).mul(tmp2);
 
-    let c0 = (&bb).add(bb);
+    let c0 = (&bb).double();
     let c0 = (&c0).add(aa);
 
     let c1 = (&bb).add(c0);
@@ -379,6 +379,11 @@ pub fn invert_fp2(a: &[BaseElement]) -> [BaseElement; 2] {
 #[inline(always)]
 pub fn add_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
     [a[0].add(b[0]), a[1].add(b[1])]
+}
+
+#[inline(always)]
+pub fn double_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+    [a[0].double(), a[1].double()]
 }
 
 #[inline(always)]
@@ -485,10 +490,10 @@ pub fn invert_fp6(a: &[BaseElement]) -> [BaseElement; POINT_COORDINATE_WIDTH] {
     let t = sub_fp2(&t, &mul_fp2(self_c1, &c1_sq));
     let tmp = add_fp2(self_c0, &sub_fp2(self_c2, self_c1));
     let t = add_fp2(&t, &mul_fp2(&tmp, &c2_sq));
-    let tmp = add_fp2(self_c0, self_c0);
+    let tmp = double_fp2(self_c0);
     let tmp = add_fp2(&tmp, self_c0);
     let tmp = mul_fp2(&tmp, self_c1);
-    let tmp = sub_fp2(&add_fp2(&c0_sq, &c0_sq), &tmp);
+    let tmp = sub_fp2(&double_fp2(&c0_sq), &tmp);
     let tmp = mul_fp2(&tmp, self_c2);
     let t = sub_fp2(&t, &tmp);
 
@@ -496,7 +501,7 @@ pub fn invert_fp6(a: &[BaseElement]) -> [BaseElement; POINT_COORDINATE_WIDTH] {
 
     let c0 = add_fp2(&c0_sq, &c1_sq);
     let c0 = add_fp2(&c0, &c2_sq);
-    let tmp = sub_fp2(&add_fp2(self_c0, self_c0), self_c1);
+    let tmp = sub_fp2(&double_fp2(self_c0), self_c1);
     let tmp = mul_fp2(&tmp, self_c2);
     let c0 = sub_fp2(&c0, &tmp);
     let c0 = mul_fp2(&c0, &t);
@@ -526,6 +531,18 @@ pub fn add_fp6<E: FieldElement + From<BaseElement>>(
         a[3].add(b[3]),
         a[4].add(b[4]),
         a[5].add(b[5]),
+    ]
+}
+
+#[inline(always)]
+pub fn double_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+    [
+        a[0].double(),
+        a[1].double(),
+        a[2].double(),
+        a[3].double(),
+        a[4].double(),
+        a[5].double(),
     ]
 }
 
