@@ -82,7 +82,7 @@ impl Air for TransactionAir {
         update_auth_degrees.append(&mut hash_constraint_degrees.clone());
         // Bits of index into Merkle tree
         update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
-            3,
+            2,
             vec![TRANSACTION_CYCLE_LENGTH],
         ));
         // Initial value hash constraints
@@ -453,7 +453,6 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     range_proof_finish_flag: E,
     copy_values_flag: E,
 ) {
-    merkle::init::evaluate_constraints(result, current, next, ark, transaction_setup_flag);
     // Enforce no change in registers representing keys
     result.agg_constraint(
         VALUE_CONSTRAINT_RES,
