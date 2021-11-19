@@ -376,19 +376,19 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         length,
         BaseElement::ONE,
     );
-
+    // Pad out the setup mask just enough to have it at the right place
     pad(
         &mut columns,
-        vec![MERKLE_MASK_INDEX, FINISH_MASK_INDEX, HASH_MASK_INDEX],
+        vec![SETUP_MASK_INDEX, MERKLE_MASK_INDEX, FINISH_MASK_INDEX, HASH_MASK_INDEX],
         length,
         BaseElement::ZERO,
     );
     // Pad to finish the cycle length
+    // Leave out SETUP_MASK so that it precedes the Merkle component by 1 row
     length += 1;
     pad(
         &mut columns,
         vec![
-            SETUP_MASK_INDEX,
             MERKLE_MASK_INDEX,
             FINISH_MASK_INDEX,
             HASH_MASK_INDEX,
@@ -491,27 +491,27 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result.agg_constraint(
         VALUE_CONSTRAINT_RES,
         transaction_setup_flag,
-        are_equal(current[SENDER_INITIAL_POS], current[SENDER_UPDATED_POS]),
+        are_equal(next[SENDER_INITIAL_POS], next[SENDER_UPDATED_POS]),
     );
     result.agg_constraint(
         VALUE_CONSTRAINT_RES + 1,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_INITIAL_POS + 1],
-            current[SENDER_UPDATED_POS + 1],
+            next[SENDER_INITIAL_POS + 1],
+            next[SENDER_UPDATED_POS + 1],
         ),
     );
     result.agg_constraint(
         VALUE_CONSTRAINT_RES + 2,
         transaction_setup_flag,
-        are_equal(current[RECEIVER_INITIAL_POS], current[RECEIVER_UPDATED_POS]),
+        are_equal(next[RECEIVER_INITIAL_POS], next[RECEIVER_UPDATED_POS]),
     );
     result.agg_constraint(
         VALUE_CONSTRAINT_RES + 3,
         transaction_setup_flag,
         are_equal(
-            current[RECEIVER_INITIAL_POS + 1],
-            current[RECEIVER_UPDATED_POS + 1],
+            next[RECEIVER_INITIAL_POS + 1],
+            next[RECEIVER_UPDATED_POS + 1],
         ),
     );
     // Enforce no change in the receiver's nonce
@@ -519,8 +519,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         VALUE_CONSTRAINT_RES + 4,
         transaction_setup_flag,
         are_equal(
-            current[RECEIVER_INITIAL_POS + 3],
-            current[RECEIVER_UPDATED_POS + 3],
+            next[RECEIVER_INITIAL_POS + 3],
+            next[RECEIVER_UPDATED_POS + 3],
         ),
     );
     // Enforce that the change in balances cancels out
@@ -528,8 +528,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         BALANCE_CONSTRAINT_RES,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_INITIAL_POS + 2] - current[SENDER_UPDATED_POS + 2],
-            current[RECEIVER_UPDATED_POS + 2] - current[RECEIVER_INITIAL_POS + 2],
+            next[SENDER_INITIAL_POS + 2] - next[SENDER_UPDATED_POS + 2],
+            next[RECEIVER_UPDATED_POS + 2] - next[RECEIVER_INITIAL_POS + 2],
         ),
     );
     // Enforce change in the sender's nonce
@@ -537,13 +537,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         NONCE_UPDATE_CONSTRAINT_RES,
         transaction_setup_flag,
         are_equal(
-            current[SENDER_UPDATED_POS + 3],
-            current[SENDER_INITIAL_POS + 3] + E::ONE,
+            next[SENDER_UPDATED_POS + 3],
+            next[SENDER_INITIAL_POS + 3] + E::ONE,
         ),
     );
 
-    // Enforce proper copying of keys at the beginning of the transaction
-    for (res_index, origin_index, copy_index) in [
+    // Enforce proper copying of keys into the beginning of the Merkle component
+    for (res_index, pos_index, copy_index) in [
         (
             SENDER_KEY_POINT_RES,
             SENDER_INITIAL_POS,
@@ -559,7 +559,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             result.agg_constraint(
                 res_index + offset,
                 transaction_setup_flag,
-                are_equal(next[copy_index + offset], current[origin_index + offset]),
+                are_equal(next[pos_index + offset], current[copy_index + offset]),
             );
         }
     }
@@ -568,19 +568,19 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         DELTA_COPY_RES,
         transaction_setup_flag,
         are_equal(
-            next[DELTA_COPY_POS],
-            current[SENDER_INITIAL_POS + 2] - current[SENDER_UPDATED_POS + 2],
+            current[DELTA_COPY_POS],
+            next[SENDER_INITIAL_POS + 2] - next[SENDER_UPDATED_POS + 2],
         ),
     );
     // Enforce proper copying of sigma and the nonce
-    for (res_index, origin_index, copy_index) in [
+    for (res_index, pos_index, copy_index) in [
         (SIGMA_COPY_RES, SENDER_UPDATED_POS + 2, SIGMA_COPY_POS),
         (NONCE_COPY_RES, SENDER_INITIAL_POS + 3, NONCE_COPY_POS),
     ] {
         result.agg_constraint(
             res_index,
             transaction_setup_flag,
-            are_equal(next[copy_index], current[origin_index]),
+            are_equal(next[pos_index], current[copy_index]),
         );
     }
 
