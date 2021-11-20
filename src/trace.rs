@@ -133,14 +133,14 @@ pub fn init_transaction_state(
     state[PREV_TREE_ROOT_POS + 1] = init_root[1];
 
     // Copy public keys and sigma = balance_sender - delta
-    let start_copy_index = merkle_const::TRACE_WIDTH;
-    state[start_copy_index] = s_old_value[0];
-    state[start_copy_index + 1] = s_old_value[1];
-    state[start_copy_index + 2] = r_old_value[0];
-    state[start_copy_index + 3] = r_old_value[1];
-    state[start_copy_index + 4] = delta;
-    state[start_copy_index + 5] = s_old_value[2] - delta;
-    state[start_copy_index + 6] = s_old_value[3];
+    //let start_copy_index = merkle_const::TRACE_WIDTH;
+    state[SENDER_KEY_POINT_POS] = s_old_value[0];
+    state[SENDER_KEY_POINT_POS + 1] = s_old_value[1];
+    state[RECEIVER_KEY_POINT_POS] = r_old_value[0];
+    state[RECEIVER_KEY_POINT_POS + 1] = r_old_value[1];
+    state[DELTA_COPY_POS] = delta;
+    //state[SIGMA_COPY_POS] = s_old_value[2] - delta;
+    state[NONCE_COPY_POS] = s_old_value[3];
 }
 
 // TRANSITION FUNCTION

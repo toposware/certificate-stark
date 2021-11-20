@@ -25,7 +25,7 @@ use super::constants::{
     SCHNORR_HASH_MASK_INDEX, SCHNORR_HASH_POS, SCHNORR_HASH_ROUND_MASK_INDEX, SCHNORR_MASK_INDEX,
     SCHNORR_REGISTER_WIDTH, SCHNORR_SETUP_MASK_INDEX, SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES,
     SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES,
-    SIGMA_RANGE_FINISH_MASK_INDEX, SIGMA_RANGE_RES, SIGMA_SETUP_RES, SIG_HASH_SETUP_RES,
+    SIGMA_RANGE_COPY_MASK_INDEX, SIGMA_RANGE_RES, SIGMA_SETUP_RES, SIG_HASH_SETUP_RES,
     S_POINT_SETUP_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
 };
 use super::merkle;
@@ -202,7 +202,7 @@ impl Air for TransactionAir {
         let range_proof_setup_flag = periodic_values[RANGE_PROOF_SETUP_MASK_INDEX];
         let range_proof_flag = periodic_values[RANGE_PROOF_STEP_MASK_INDEX];
         let delta_range_finish_flag = periodic_values[DELTA_RANGE_FINISH_MASK_INDEX];
-        let sigma_range_finish_flag = periodic_values[SIGMA_RANGE_FINISH_MASK_INDEX];
+        let sigma_range_copy_flag = periodic_values[SIGMA_RANGE_COPY_MASK_INDEX];
         let copy_values_flag = periodic_values[VALUE_COPY_MASK_INDEX];
         let ark = &periodic_values[ARK_INDEX..];
 
@@ -232,7 +232,7 @@ impl Air for TransactionAir {
             range_proof_setup_flag,
             range_proof_flag,
             delta_range_finish_flag,
-            sigma_range_finish_flag,
+            sigma_range_copy_flag,
             copy_values_flag,
         )
     }
@@ -322,7 +322,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             RANGE_PROOF_SETUP_MASK_INDEX,
             RANGE_PROOF_STEP_MASK_INDEX,
             DELTA_RANGE_FINISH_MASK_INDEX,
-            SIGMA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_COPY_MASK_INDEX,
         ],
         length + hash_mask_len + 1,
         BaseElement::ZERO,
@@ -330,24 +330,23 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     let mut range_proof_setup_mask = vec![BaseElement::ZERO; RANGE_LOG + 1];
     let mut range_proof_mask = vec![BaseElement::ONE; RANGE_LOG + 1];
     let mut delta_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
-    let mut sigma_range_finish_mask = vec![BaseElement::ZERO; RANGE_LOG * 2 + 1];
+    let sigma_range_copy_mask = vec![BaseElement::ZERO; RANGE_LOG * 2 + 1];
     range_proof_setup_mask[0] = BaseElement::ONE;
     range_proof_mask[RANGE_LOG] = BaseElement::ZERO;
     delta_range_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
-    sigma_range_finish_mask[RANGE_LOG * 2] = BaseElement::ONE;
     stitch(
         &mut columns,
         vec![
             range_proof_setup_mask.clone(),
             range_proof_mask.clone(),
             delta_range_finish_mask,
-            sigma_range_finish_mask,
+            sigma_range_copy_mask,
         ],
         vec![
             RANGE_PROOF_SETUP_MASK_INDEX,
             RANGE_PROOF_STEP_MASK_INDEX,
             DELTA_RANGE_FINISH_MASK_INDEX,
-            SIGMA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_COPY_MASK_INDEX,
         ]
         .into_iter()
         .enumerate()
@@ -372,7 +371,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     // Pad out the copy constraints
     pad(
         &mut columns,
-        vec![VALUE_COPY_MASK_INDEX],
+        vec![VALUE_COPY_MASK_INDEX, SIGMA_RANGE_COPY_MASK_INDEX],
         length,
         BaseElement::ONE,
     );
@@ -401,7 +400,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             RANGE_PROOF_SETUP_MASK_INDEX,
             RANGE_PROOF_STEP_MASK_INDEX,
             DELTA_RANGE_FINISH_MASK_INDEX,
-            SIGMA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_COPY_MASK_INDEX,
             VALUE_COPY_MASK_INDEX,
         ],
         length,
@@ -448,7 +447,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             RANGE_PROOF_SETUP_MASK_INDEX,
             RANGE_PROOF_STEP_MASK_INDEX,
             DELTA_RANGE_FINISH_MASK_INDEX,
-            SIGMA_RANGE_FINISH_MASK_INDEX,
+            SIGMA_RANGE_COPY_MASK_INDEX,
             VALUE_COPY_MASK_INDEX,
         ],
         length,
@@ -484,7 +483,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     range_proof_setup_flag: E,
     range_proof_flag: E,
     delta_range_finish_flag: E,
-    sigma_range_finish_flag: E,
+    sigma_range_copy_flag: E,
     copy_values_flag: E,
 ) {
     // Enforce no change in registers representing keys
@@ -599,7 +598,6 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     }
     for (res_index, copy_index) in [
         (DELTA_COPY_RES, DELTA_COPY_POS),
-        (SIGMA_COPY_RES, SIGMA_COPY_POS),
         (NONCE_COPY_RES, NONCE_COPY_POS),
     ] {
         result.agg_constraint(
@@ -723,8 +721,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
     result.agg_constraint(
         SIGMA_RANGE_RES,
-        sigma_range_finish_flag,
-        are_equal(next[SIGMA_ACCUMULATE_POS], next[SIGMA_COPY_POS]),
+        sigma_range_copy_flag,
+        are_equal(next[SIGMA_COPY_POS], current[SIGMA_COPY_POS]),
     );
     // Enforce that the purported x component of T matches the computed one
     result.agg_constraint(

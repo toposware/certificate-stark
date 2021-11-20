@@ -28,20 +28,22 @@ pub mod schnorr_const {
 
 /// Total trace width for the state transition AIR program
 // The 6 extra registers are for copying the public keys, delta and the new sender balance
-pub const TRACE_WIDTH: usize = merkle_const::TRACE_WIDTH + 7;
+pub const TRACE_WIDTH: usize = merkle_const::TRACE_WIDTH + 2;
 
 /// The width of the trace used for Merkle registers
 pub const MERKLE_REGISTER_WIDTH: usize = merkle_const::TRACE_WIDTH;
+/// The width of the trace used for Schnorr registers
+pub const SCHNORR_REGISTER_WIDTH: usize = schnorr_const::TRACE_WIDTH;
 /// Beginning position of the copy of the sender's public key
-pub const SENDER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH;
+pub const SENDER_KEY_POINT_POS: usize = SCHNORR_REGISTER_WIDTH;
 /// Beginning position of the copy of the receiver's public key
-pub const RECEIVER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + 2;
+pub const RECEIVER_KEY_POINT_POS: usize = SCHNORR_REGISTER_WIDTH + 2;
 /// Position of the register copying delta
-pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 4;
+pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH;
 /// Position of the register copying the sender's updated balance
-pub const SIGMA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 5;
+pub const SIGMA_COPY_POS: usize = SCHNORR_REGISTER_WIDTH - 1;
 /// Position of the register copying the sender's updated nonce
-pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 6;
+pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 1;
 /// Position of the register copying the x component of R
 pub const RX_COPY_POS: usize = schnorr_const::TRACE_WIDTH + 4;
 
@@ -75,9 +77,7 @@ pub const SIGMA_SETUP_RES: usize = DELTA_SETUP_RES + 1;
 /// Index of constraint for enforcing copying of the x component of R
 pub const RX_COPY_RES: usize = schnorr_const::TRACE_WIDTH + 4;
 
-/// The width of the trace used for Schnorr registers
-pub const SCHNORR_REGISTER_WIDTH: usize = schnorr_const::TRACE_WIDTH;
-/// Poaition of the beginning of the hash state for Schnorr signature
+/// Position of the beginning of the hash state for Schnorr signature
 pub const SCHNORR_HASH_POS: usize = 2 * schnorr_const::POINT_WIDTH + 3;
 /// Position of the bit decomposition of delta
 pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH - 2;
@@ -122,7 +122,7 @@ pub const RANGE_PROOF_STEP_MASK_INDEX: usize = 14;
 /// The index for the mask checking final range proof equality
 pub const DELTA_RANGE_FINISH_MASK_INDEX: usize = 15;
 /// The index for the mask checking final range proof equality
-pub const SIGMA_RANGE_FINISH_MASK_INDEX: usize = 16;
+pub const SIGMA_RANGE_COPY_MASK_INDEX: usize = 16;
 /// The index for the mask checking carry-over of values from Merkle to Schnorr
 pub const VALUE_COPY_MASK_INDEX: usize = 17;
 /// The index for the mask enforcing proper setup of the Schnorr component
