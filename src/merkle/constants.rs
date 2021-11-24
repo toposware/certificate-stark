@@ -53,8 +53,8 @@ pub const VALUE_CONSTRAINT_RES: usize = TRACE_WIDTH;
 /// Index of constraint for balance update equality
 pub const BALANCE_CONSTRAINT_RES: usize = TRACE_WIDTH + AFFINE_POINT_WIDTH * 2 + 1;
 /// Index of constraint for updating the sender's nonce
-pub const NONCE_UPDATE_CONSTRAINT_RES: usize = TRACE_WIDTH + AFFINE_POINT_WIDTH * 2 + 2;
+pub const NONCE_UPDATE_CONSTRAINT_RES: usize = BALANCE_CONSTRAINT_RES + 1;
 /// Beginning index of intermediate tree root equality constraints
-pub const INT_ROOT_EQUALITY_RES: usize = TRACE_WIDTH + AFFINE_POINT_WIDTH * 2 + 3;
+pub const INT_ROOT_EQUALITY_RES: usize = NONCE_UPDATE_CONSTRAINT_RES + 1;
 /// Beginning index of constraints for previous tree root matching
-pub const PREV_TREE_MATCH_RES: usize = TRACE_WIDTH + 34;
+pub const PREV_TREE_MATCH_RES: usize = INT_ROOT_EQUALITY_RES + HASH_RATE_WIDTH;
