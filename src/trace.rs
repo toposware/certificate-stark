@@ -31,11 +31,11 @@ use schnorr_const::{
 // The trace is composed as follows:
 // (note that sigma here refers to sender_balance - delta)
 //
-// | 4 * HASH_STATE + 4 |      2 * AFF_POINT + 3      | number of registers
-// |    merkle::init    | copy_keys_delta_sigma_nonce | sub-programs
-// |   merkle::update   | copy_keys_delta_sigma_nonce |
-// |   schnorr::init    | copy_keys_delta_sigma_nonce |
-// |   schnorr::verif   | range_proof_delta_and_sigma |
+// | 4 * HASH_STATE + 2 + HASH_RATE |      2 * AFF_POINT + 3      | number of registers
+// |          merkle::init          | copy_keys_delta_sigma_nonce | sub-programs
+// |         merkle::update         | copy_keys_delta_sigma_nonce |
+// |         schnorr::init          | copy_keys_delta_sigma_nonce |
+// |         schnorr::verif         | range_proof_delta_and_sigma |
 #[allow(clippy::too_many_arguments)]
 pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
     let initial_roots = &tx_metadata.initial_roots;
@@ -177,10 +177,13 @@ pub fn update_transaction_state(
         schnorr::init_sig_verification_state(signature, &mut state[..schnorr_const::TRACE_WIDTH]);
         // We set the 4 registers next to the Schnorr signature sub-trace to zero, for computing
         // the range proofs on delta and sigma = sender_balance - delta
-        let start_range_index = schnorr_const::TRACE_WIDTH;
-        range::init_range_verification_state(&mut state[start_range_index..start_range_index + 2]);
+        let start_delta_range_index = schnorr_const::TRACE_WIDTH;
+        let start_sigma_range_index = NONCE_COPY_POS + 1;
         range::init_range_verification_state(
-            &mut state[start_range_index + 2..start_range_index + 4],
+            &mut state[start_delta_range_index..start_delta_range_index + 2],
+        );
+        range::init_range_verification_state(
+            &mut state[start_sigma_range_index..start_sigma_range_index + 2],
         );
     } else if schnorr_update_flag {
         // Proceed to Schnorr signature verification
@@ -196,18 +199,19 @@ pub fn update_transaction_state(
 
         if schnorr_step < range::RANGE_LOG {
             // Compute the range proof on delta and sigma
-            let start_range_index = schnorr_const::TRACE_WIDTH;
+            let start_delta_range_index = schnorr_const::TRACE_WIDTH;
+            let start_sigma_range_index = NONCE_COPY_POS + 1;
             range::update_range_verification_state(
                 schnorr_step,
                 range_const::RANGE_LOG,
                 delta_bits,
-                &mut state[start_range_index..start_range_index + 2],
+                &mut state[start_delta_range_index..start_delta_range_index + 2],
             );
             range::update_range_verification_state(
                 schnorr_step,
                 range_const::RANGE_LOG,
                 sigma_bits,
-                &mut state[start_range_index + 2..start_range_index + 4],
+                &mut state[start_sigma_range_index..start_sigma_range_index + 2],
             );
         } else {
             debug_assert_eq!(

@@ -83,6 +83,12 @@ impl Air for SchnorrAir {
             2,
             vec![SIG_CYCLE_LENGTH],
         ));
+        for _ in 1..4 {
+            degrees.push(TransitionConstraintDegree::with_cycles(
+                1,
+                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
+            ));
+        }
         // Rescue hash
         degrees.push(TransitionConstraintDegree::with_cycles(
             1,
@@ -123,11 +129,12 @@ impl Air for SchnorrAir {
         let global_mask = periodic_values[0];
         let scalar_mult_flag = periodic_values[1];
         let doubling_flag = periodic_values[2];
-        let pkey_point = &periodic_values[3..AFFINE_POINT_WIDTH + 3];
-        let hash_flag = periodic_values[AFFINE_POINT_WIDTH + 3];
+        let hash_digest_register_flag = &periodic_values[3..7];
+        let pkey_point = &periodic_values[7..AFFINE_POINT_WIDTH + 7];
+        let hash_flag = periodic_values[AFFINE_POINT_WIDTH + 7];
         let hash_internal_inputs =
-            &periodic_values[AFFINE_POINT_WIDTH + 4..AFFINE_POINT_WIDTH + 11];
-        let ark = &periodic_values[AFFINE_POINT_WIDTH + 11..];
+            &periodic_values[AFFINE_POINT_WIDTH + 8..AFFINE_POINT_WIDTH + 15];
+        let ark = &periodic_values[AFFINE_POINT_WIDTH + 15..];
 
         let copy_hash_flag = not(hash_flag) * global_mask;
         let final_point_addition_flag = not(scalar_mult_flag) * global_mask;
@@ -140,6 +147,7 @@ impl Air for SchnorrAir {
             ark,
             doubling_flag,
             addition_flag,
+            hash_digest_register_flag,
             pkey_point,
             final_point_addition_flag,
             hash_flag,
@@ -194,47 +202,49 @@ impl Air for SchnorrAir {
                 ));
             }
         }
-        assertions.push(Assertion::periodic(
-            2 * PROJECTIVE_POINT_WIDTH + 2,
-            0,
-            SIG_CYCLE_LENGTH,
-            BaseElement::ZERO,
-        ));
+        for i in 0..5 {
+            assertions.push(Assertion::periodic(
+                i + 2 * PROJECTIVE_POINT_WIDTH + 1,
+                0,
+                SIG_CYCLE_LENGTH,
+                BaseElement::ZERO,
+            ));
+        }
 
         // TODO: find a way to do this better with indexing
         assertions.append(&mut vec![
             Assertion::sequence(
-                2 * PROJECTIVE_POINT_WIDTH + 3,
+                2 * PROJECTIVE_POINT_WIDTH + 6,
                 0,
                 SIG_CYCLE_LENGTH,
                 signatures.0.clone(),
             ),
             Assertion::sequence(
-                2 * PROJECTIVE_POINT_WIDTH + 4,
+                2 * PROJECTIVE_POINT_WIDTH + 7,
                 0,
                 SIG_CYCLE_LENGTH,
                 signatures.1.clone(),
             ),
             Assertion::sequence(
-                2 * PROJECTIVE_POINT_WIDTH + 5,
+                2 * PROJECTIVE_POINT_WIDTH + 8,
                 0,
                 SIG_CYCLE_LENGTH,
                 signatures.2.clone(),
             ),
             Assertion::sequence(
-                2 * PROJECTIVE_POINT_WIDTH + 6,
+                2 * PROJECTIVE_POINT_WIDTH + 9,
                 0,
                 SIG_CYCLE_LENGTH,
                 signatures.3.clone(),
             ),
             Assertion::sequence(
-                2 * PROJECTIVE_POINT_WIDTH + 7,
+                2 * PROJECTIVE_POINT_WIDTH + 10,
                 0,
                 SIG_CYCLE_LENGTH,
                 signatures.4.clone(),
             ),
             Assertion::sequence(
-                2 * PROJECTIVE_POINT_WIDTH + 8,
+                2 * PROJECTIVE_POINT_WIDTH + 11,
                 0,
                 SIG_CYCLE_LENGTH,
                 signatures.5.clone(),
@@ -242,7 +252,7 @@ impl Air for SchnorrAir {
         ]);
         for i in 0..HASH_RATE_WIDTH {
             assertions.push(Assertion::periodic(
-                i + 2 * PROJECTIVE_POINT_WIDTH + POINT_COORDINATE_WIDTH + 3,
+                i + 2 * PROJECTIVE_POINT_WIDTH + POINT_COORDINATE_WIDTH + 6,
                 0,
                 SIG_CYCLE_LENGTH,
                 BaseElement::ZERO,
@@ -266,12 +276,21 @@ impl Air for SchnorrAir {
 
     fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
         // Start with empty periodic columns
-        let mut columns = vec![Vec::new(); POINT_COORDINATE_WIDTH + PROJECTIVE_POINT_WIDTH - 1];
+        let mut columns = vec![Vec::new(); POINT_COORDINATE_WIDTH + PROJECTIVE_POINT_WIDTH + 3];
         // Stitch in the periodic columns applicable to all uses of Schnorr
         stitch(
             &mut columns,
             periodic_columns(),
-            vec![(0, 0), (1, 1), (2, 2), (3, 3 + AFFINE_POINT_WIDTH)],
+            vec![
+                (0, 0),
+                (1, 1),
+                (2, 2),
+                (3, 3),
+                (4, 4),
+                (5, 5),
+                (6, 6),
+                (7, 7 + AFFINE_POINT_WIDTH),
+            ],
         );
         // Values to feed to the last registers of the hash state at the end of a cycle.
         // Always zero (i.e. resetting the rate) or equal to the chunks of the message.
@@ -314,12 +333,12 @@ impl Air for SchnorrAir {
         stitch(
             &mut columns,
             pub_keys,
-            (3..3 + AFFINE_POINT_WIDTH).enumerate().collect(),
+            (7..7 + AFFINE_POINT_WIDTH).enumerate().collect(),
         );
         stitch(
             &mut columns,
             hash_intermediate_inputs,
-            (4 + AFFINE_POINT_WIDTH..4 + AFFINE_POINT_WIDTH + HASH_RATE_WIDTH)
+            (8 + AFFINE_POINT_WIDTH..8 + AFFINE_POINT_WIDTH + HASH_RATE_WIDTH)
                 .enumerate()
                 .collect(),
         );
@@ -396,6 +415,13 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         SIG_CYCLE_LENGTH - point_doubling_flag.len()
     ]);
 
+    // Flag for selecting the limb of the hash digest
+    let mut hash_digest_register_flag = vec![vec![BaseElement::ZERO; SIG_CYCLE_LENGTH]; 4];
+    hash_digest_register_flag[0][0..126].copy_from_slice(&[BaseElement::ONE; 126]);
+    hash_digest_register_flag[1][126..254].copy_from_slice(&[BaseElement::ONE; 128]);
+    hash_digest_register_flag[2][254..382].copy_from_slice(&[BaseElement::ONE; 128]);
+    hash_digest_register_flag[3][382..510].copy_from_slice(&[BaseElement::ONE; 128]);
+
     let mut global_mask = vec![BaseElement::ONE; SCALAR_MUL_LENGTH + 1];
     global_mask.append(&mut vec![
         BaseElement::ZERO;
@@ -408,6 +434,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     let mut result = vec![global_mask];
     result.append(&mut vec![scalar_mult_flag]);
     result.append(&mut vec![point_doubling_flag]);
+    result.append(&mut hash_digest_register_flag);
     result.append(&mut vec![hash_flag]);
     result.append(&mut rescue_constants);
 
@@ -422,6 +449,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     ark: &[E],
     doubling_flag: E,
     addition_flag: E,
+    hash_digest_register_flag: &[E],
     pkey_point: &[E],
     final_point_addition_flag: E,
     hash_flag: E,
@@ -471,22 +499,35 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         addition_flag,
     );
 
-    // Enforce a step of double-and-add in the field for h
-    field::enforce_double_and_add_step_constrained(
-        &mut result[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 3],
-        &current[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 3],
-        &next[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 3],
-        1,
-        0,
-        doubling_flag, // Do not repeat it twice
-    );
+    // Enforce a step of double-and-add in the field for the hash digest limbs
+    for (i, &flag) in hash_digest_register_flag.iter().enumerate().take(4) {
+        field::enforce_double_and_add_step_constrained(
+            &mut result[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 6],
+            &current[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 6],
+            &next[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 6],
+            4 - i,
+            0,
+            flag * doubling_flag, // Do not repeat it twice
+        );
+    }
+    // Enforce temporary accumulators copy between steps
+    for i in 0..4 {
+        result.agg_constraint(
+            2 * PROJECTIVE_POINT_WIDTH + 2 + i,
+            addition_flag,
+            are_equal(
+                current[2 * PROJECTIVE_POINT_WIDTH + 2 + i],
+                next[2 * PROJECTIVE_POINT_WIDTH + 2 + i],
+            ),
+        );
+    }
 
     // When hash_flag = 1, constraints for a Rescue round
     // are enforced on the dedicated registers
     rescue::enforce_round(
-        &mut result[2 * PROJECTIVE_POINT_WIDTH + 3..],
-        &current[2 * PROJECTIVE_POINT_WIDTH + 3..],
-        &next[2 * PROJECTIVE_POINT_WIDTH + 3..],
+        &mut result[2 * PROJECTIVE_POINT_WIDTH + 6..],
+        &current[2 * PROJECTIVE_POINT_WIDTH + 6..],
+        &next[2 * PROJECTIVE_POINT_WIDTH + 6..],
         ark,
         hash_flag,
     );
@@ -495,9 +536,9 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     // and updating the rate registers with self.message[i] elements are enforced.
 
     enforce_hash_copy(
-        &mut result[2 * PROJECTIVE_POINT_WIDTH + 3..],
-        &current[2 * PROJECTIVE_POINT_WIDTH + 3..],
-        &next[2 * PROJECTIVE_POINT_WIDTH + 3..],
+        &mut result[2 * PROJECTIVE_POINT_WIDTH + 6..],
+        &current[2 * PROJECTIVE_POINT_WIDTH + 6..],
+        &next[2 * PROJECTIVE_POINT_WIDTH + 6..],
         copy_hash_flag,
         hash_internal_inputs,
     );
@@ -516,17 +557,19 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
 
     // Ensure that the accumulated value from the binary decomposition of h
     // matches the output of Rescue iterated hashes
-    result.agg_constraint(
-        2 * PROJECTIVE_POINT_WIDTH + 2,
-        final_point_addition_flag,
-        are_equal(
-            next[2 * PROJECTIVE_POINT_WIDTH + 2],
-            next[2 * PROJECTIVE_POINT_WIDTH + 3],
-        ),
-    );
+    for i in 0..4 {
+        result.agg_constraint(
+            2 * PROJECTIVE_POINT_WIDTH + 2 + i,
+            final_point_addition_flag,
+            are_equal(
+                current[2 * PROJECTIVE_POINT_WIDTH + 2 + i],
+                current[2 * PROJECTIVE_POINT_WIDTH + 6 + i],
+            ),
+        );
+    }
 }
 
-// TODO: Maybe simply signature definition a little
+// TODO: Maybe simplify signature definition a little
 #[allow(clippy::type_complexity)]
 fn transpose_signatures(
     signatures: &[([BaseElement; POINT_COORDINATE_WIDTH], Scalar)],

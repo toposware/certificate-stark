@@ -21,12 +21,16 @@ pub const TOTAL_HASH_LENGTH: usize = HASH_CYCLE_LENGTH * NUM_HASH_ITER;
 // Scalar multiplication constants
 
 /// Number of steps during the scalar multiplication
-pub const SCALAR_MUL_LENGTH: usize = 508; // two times 254, as double/add steps are decoupled
+// Equals two times 255, as double/add steps are decoupled. We purposely use 255 bits
+// (instead of 254) even if the scalar field Fq is 254-bit long because we use the binary
+// decomposition of the hash inside the AIR program which consists of 4 63-bit elements
+// from Fp, of which we can ignore the MSB of the first limb.
+pub const SCALAR_MUL_LENGTH: usize = 510;
 
 // Periodic trace length
 
 /// Total number of registers in the trace
-// 2 points in projective coordinates, 2 binary decompositions, 1 field element, 1 hash state
-pub const TRACE_WIDTH: usize = 2 * PROJECTIVE_POINT_WIDTH + 2 + 1 + STATE_WIDTH;
+// 2 points in projective coordinates, 2 binary decompositions, 4 field elements, 1 hash state
+pub const TRACE_WIDTH: usize = 2 * PROJECTIVE_POINT_WIDTH + 2 + 4 + STATE_WIDTH;
 /// Total number of steps in the trace for a single signature
 pub const SIG_CYCLE_LENGTH: usize = 512;

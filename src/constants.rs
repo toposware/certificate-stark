@@ -28,7 +28,7 @@ pub mod schnorr_const {
 
 /// Total trace width for the state transition AIR program
 // The extra registers are for copying the public keys, delta and the new sender balance
-pub const TRACE_WIDTH: usize = NONCE_COPY_POS + 1;
+pub const TRACE_WIDTH: usize = NONCE_COPY_POS + 3;
 
 /// The width of the trace used for Merkle registers
 pub const MERKLE_REGISTER_WIDTH: usize = merkle_const::TRACE_WIDTH;
@@ -66,9 +66,9 @@ pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH;
 /// Position of the accumulated value for delta
 pub const DELTA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 1;
 /// Position of the bit decomposition of sigma
-pub const SIGMA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH + 2;
+pub const SIGMA_BIT_POS: usize = NONCE_COPY_POS + 1;
 /// Position of the accumulated value for delta
-pub const SIGMA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 3;
+pub const SIGMA_ACCUMULATE_POS: usize = NONCE_COPY_POS + 2;
 
 /// Total length for verifying a transaction
 // Dominated by the Merkle authentication paths and the Schnorr signature verification
@@ -91,8 +91,10 @@ pub const SCHNORR_MASK_INDEX: usize = HASH_MASK_INDEX + 1;
 pub const SCALAR_MULT_MASK_INDEX: usize = SCHNORR_MASK_INDEX + 1;
 /// The index for the point doubling mask
 pub const DOUBLING_MASK_INDEX: usize = SCALAR_MULT_MASK_INDEX + 1;
+/// The index for the hash digest registers mask
+pub const SCHNORR_DIGEST_MASK_INDEX: usize = DOUBLING_MASK_INDEX + 1;
 /// The index for the Schnorr hash mask
-pub const SCHNORR_HASH_MASK_INDEX: usize = DOUBLING_MASK_INDEX + 1;
+pub const SCHNORR_HASH_MASK_INDEX: usize = SCHNORR_DIGEST_MASK_INDEX + 4;
 /// The starting index for the flags for copying parts to the hash internal inputs
 pub const HASH_INTERNAL_INPUT_MASKS_INDEX: usize = SCHNORR_HASH_MASK_INDEX + 1;
 /// The index for the mask specifying range proof computations

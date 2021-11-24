@@ -58,7 +58,7 @@ pub fn init_sig_verification_state(
 
     state[PROJECTIVE_POINT_WIDTH + POINT_COORDINATE_WIDTH + 1] = BaseElement::ONE; // y(h.P)
 
-    state[PROJECTIVE_POINT_WIDTH * 2 + 3..PROJECTIVE_POINT_WIDTH * 2 + POINT_COORDINATE_WIDTH + 3]
+    state[PROJECTIVE_POINT_WIDTH * 2 + 6..PROJECTIVE_POINT_WIDTH * 2 + POINT_COORDINATE_WIDTH + 6]
         .copy_from_slice(&signature.0[..]); // x(R)
 }
 
@@ -80,12 +80,12 @@ pub fn update_sig_verification_state(
     // enforcing the three kind of rescue operations
     if rescue_flag && (rescue_step < NUM_HASH_ROUNDS) {
         // for the first NUM_HASH_ROUNDS steps in every cycle, compute a single round of Rescue hash
-        rescue::apply_round(&mut state[PROJECTIVE_POINT_WIDTH * 2 + 3..], step);
+        rescue::apply_round(&mut state[PROJECTIVE_POINT_WIDTH * 2 + 6..], step);
     } else if rescue_flag && (step < (NUM_HASH_ITER - 1) * HASH_CYCLE_LENGTH) {
         // for the next step, insert message chunks in the state registers
         let index = step / HASH_CYCLE_LENGTH;
         for i in 0..rescue::RATE_WIDTH {
-            state[PROJECTIVE_POINT_WIDTH * 2 + rescue::RATE_WIDTH + 3 + i] =
+            state[PROJECTIVE_POINT_WIDTH * 2 + rescue::RATE_WIDTH + 6 + i] =
                 message[rescue::RATE_WIDTH * index + i];
         }
     } else if rescue_flag {
@@ -95,7 +95,7 @@ pub fn update_sig_verification_state(
         // Hence we manually set them to zero for the final hash iteration, and this will
         // carry over until the end of the trace
         for i in 0..rescue::RATE_WIDTH {
-            state[PROJECTIVE_POINT_WIDTH * 2 + rescue::RATE_WIDTH + 3 + i] = BaseElement::ZERO;
+            state[PROJECTIVE_POINT_WIDTH * 2 + rescue::RATE_WIDTH + 6 + i] = BaseElement::ZERO;
         }
     }
 
@@ -104,6 +104,11 @@ pub fn update_sig_verification_state(
         Ordering::Less => {
             let real_step = step / 2;
             let is_doubling_step = step % 2 == 0;
+            let chunk = if real_step < 63 {
+                0
+            } else {
+                (real_step - 63) / 64 + 1
+            };
             state[PROJECTIVE_POINT_WIDTH] =
                 BaseElement::from(s_bits[bit_length - 1 - real_step] as u8);
             state[2 * PROJECTIVE_POINT_WIDTH + 1] =
@@ -115,8 +120,8 @@ pub fn update_sig_verification_state(
                     &mut state[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
                 );
                 field::apply_double_and_add_step(
-                    &mut state[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 3],
-                    1,
+                    &mut state[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 6],
+                    4 - chunk,
                     0,
                 );
             } else {
@@ -159,10 +164,10 @@ pub fn build_sig_info(
     let s_bytes = signature.1.to_bytes();
 
     let h = super::hash_message(signature.0, *message);
-    // TODO: getting only one 64-bit word to not have wrong field arithmetic,
-    // but should take 4 at least.
     let mut h_bytes = [0u8; 32];
-    h_bytes[0..8].copy_from_slice(&h[0].to_bytes());
+    for (i, h_word) in h.iter().enumerate().take(4) {
+        h_bytes[8 * i..8 * i + 8].copy_from_slice(&h_word.to_bytes());
+    }
 
     (pkey_point, s_bytes, h_bytes)
 }

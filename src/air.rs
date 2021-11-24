@@ -21,9 +21,10 @@ use super::constants::{
     HASH_INTERNAL_INPUT_MASKS_INDEX, HASH_MASK_INDEX, MERKLE_MASK_INDEX, NONCE_COPY_POS,
     NONCE_COPY_RES, RANGE_PROOF_FINISH_MASK_INDEX, RANGE_PROOF_STEP_MASK_INDEX,
     RECEIVER_KEY_POINT_POS, RECEIVER_KEY_POINT_RES, SCALAR_MULT_MASK_INDEX,
-    SCHNORR_HASH_MASK_INDEX, SCHNORR_MASK_INDEX, SCHNORR_REGISTER_WIDTH, SENDER_KEY_POINT_POS,
-    SENDER_KEY_POINT_RES, SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS, SIGMA_BIT_POS, SIGMA_COPY_POS,
-    SIGMA_COPY_RES, SIGMA_RANGE_RES, TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
+    SCHNORR_DIGEST_MASK_INDEX, SCHNORR_HASH_MASK_INDEX, SCHNORR_MASK_INDEX, SCHNORR_REGISTER_WIDTH,
+    SENDER_KEY_POINT_POS, SENDER_KEY_POINT_RES, SETUP_MASK_INDEX, SIGMA_ACCUMULATE_POS,
+    SIGMA_BIT_POS, SIGMA_COPY_POS, SIGMA_COPY_RES, SIGMA_RANGE_RES, TRACE_WIDTH,
+    TRANSACTION_CYCLE_LENGTH, VALUE_COPY_MASK_INDEX,
 };
 use super::merkle;
 use super::schnorr;
@@ -97,6 +98,8 @@ impl Air for TransactionAir {
                 TransitionConstraintDegree::with_cycles(1, vec![TRANSACTION_CYCLE_LENGTH]);
                 PREV_TREE_MATCH_RES + HASH_RATE_WIDTH - PREV_TREE_ROOT_RES
             ];
+        remaining_degrees[PREV_TREE_MATCH_RES - PREV_TREE_ROOT_RES - HASH_RATE_WIDTH] =
+            TransitionConstraintDegree::with_cycles(2, vec![TRANSACTION_CYCLE_LENGTH]);
         degrees.append(&mut remaining_degrees);
         let bit_degree = 5;
         let schnorr_degrees = vec![
@@ -248,6 +251,18 @@ impl Air for TransactionAir {
                 vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
             ),
             TransitionConstraintDegree::with_cycles(2, vec![TRANSACTION_CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(
+                1,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                1,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
+            TransitionConstraintDegree::with_cycles(
+                1,
+                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
+            ),
             // Rescue hash
             TransitionConstraintDegree::with_cycles(
                 1,
@@ -319,6 +334,8 @@ impl Air for TransactionAir {
         let schnorr_mask = periodic_values[SCHNORR_MASK_INDEX];
         let scalar_mult_flag = periodic_values[SCALAR_MULT_MASK_INDEX];
         let doubling_flag = periodic_values[DOUBLING_MASK_INDEX];
+        let schnorr_hash_digest_register_flag =
+            &periodic_values[SCHNORR_DIGEST_MASK_INDEX..SCHNORR_HASH_MASK_INDEX];
         let schnorr_hash_flag = periodic_values[SCHNORR_HASH_MASK_INDEX];
         let hash_internal_input_flags =
             &periodic_values[HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX];
@@ -345,6 +362,7 @@ impl Air for TransactionAir {
             transaction_finish_flag,
             doubling_flag,
             addition_flag,
+            schnorr_hash_digest_register_flag,
             final_point_addition_flag,
             schnorr_hash_flag,
             copy_hash_flag,
@@ -444,6 +462,12 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     );
     pad(
         &mut columns,
+        (SCHNORR_DIGEST_MASK_INDEX..SCHNORR_HASH_MASK_INDEX).collect(),
+        length,
+        BaseElement::ZERO,
+    );
+    pad(
+        &mut columns,
         vec![VALUE_COPY_MASK_INDEX],
         length,
         BaseElement::ONE,
@@ -458,6 +482,10 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
             SCHNORR_MASK_INDEX,
             SCALAR_MULT_MASK_INDEX,
             DOUBLING_MASK_INDEX,
+            SCHNORR_DIGEST_MASK_INDEX,
+            SCHNORR_DIGEST_MASK_INDEX + 1,
+            SCHNORR_DIGEST_MASK_INDEX + 2,
+            SCHNORR_DIGEST_MASK_INDEX + 3,
             SCHNORR_HASH_MASK_INDEX,
         ]
         .into_iter()
@@ -539,6 +567,12 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     );
     pad(
         &mut columns,
+        (SCHNORR_DIGEST_MASK_INDEX..SCHNORR_DIGEST_MASK_INDEX + 4).collect(),
+        length,
+        BaseElement::ZERO,
+    );
+    pad(
+        &mut columns,
         (HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3).collect(),
         length,
         BaseElement::ZERO,
@@ -559,6 +593,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     transaction_finish_flag: E,
     doubling_flag: E,
     addition_flag: E,
+    schnorr_hash_digest_register_flag: &[E],
     final_point_addition_flag: E,
     schnorr_hash_flag: E,
     copy_hash_flag: E,
@@ -737,6 +772,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         ark,
         doubling_flag,
         addition_flag,
+        schnorr_hash_digest_register_flag,
         &next[SENDER_KEY_POINT_POS..SENDER_KEY_POINT_POS + AFFINE_POINT_WIDTH],
         final_point_addition_flag,
         schnorr_hash_flag,

@@ -171,10 +171,10 @@ pub fn sign(
     let r_point = AffinePoint::from(AffinePoint::generator() * r);
 
     let h = hash_message(r_point.get_x(), message);
-    // TODO: getting only one 64-bit word to not have wrong field arithmetic,
-    // but should take 4 at least.
     let mut h_bytes = [0u8; 32];
-    h_bytes[0..8].copy_from_slice(&h[0].to_bytes());
+    for (i, h_word) in h.iter().enumerate().take(4) {
+        h_bytes[8 * i..8 * i + 8].copy_from_slice(&h_word.to_bytes());
+    }
     let h_bits = h_bytes.as_bits::<Lsb0>();
 
     // Reconstruct a scalar from the binary sequence of h
@@ -196,10 +196,10 @@ pub fn verify_signature(
     assert!(pkey.is_on_curve());
 
     let h = hash_message(signature.0, message);
-    // TODO: getting only one 64-bit word to not have wrong field arithmetic,
-    // but should take 4 at least.
     let mut h_bytes = [0u8; 32];
-    h_bytes[0..8].copy_from_slice(&h[0].to_bytes());
+    for (i, h_word) in h.iter().enumerate().take(4) {
+        h_bytes[8 * i..8 * i + 8].copy_from_slice(&h_word.to_bytes());
+    }
     let h_bits = h_bytes.as_bits::<Lsb0>();
 
     // Reconstruct a scalar from the binary sequence of h
