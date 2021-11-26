@@ -38,13 +38,13 @@ pub const GENERATOR: [BaseElement; PROJECTIVE_POINT_WIDTH] = [
     BaseElement::ZERO,
 ];
 
-pub const B: [BaseElement; POINT_COORDINATE_WIDTH] = [
-    BaseElement::new(1526905369741321712),
-    BaseElement::new(2508413708960025374),
-    BaseElement::new(3518137720867787056),
-    BaseElement::new(3999205700308519553),
-    BaseElement::new(1935817186716799185),
-    BaseElement::new(1200866201009650596),
+pub const B3: [BaseElement; POINT_COORDINATE_WIDTH] = [
+    BaseElement::new(4580716109223965136),
+    BaseElement::new(2805468717395796313),
+    BaseElement::new(1114868343634801550),
+    BaseElement::new(2558072281956999041),
+    BaseElement::new(1087679150666117746),
+    BaseElement::new(3602598603028951788),
 ];
 
 // TRACE
@@ -184,15 +184,14 @@ fn compute_double<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
     let self_y = &state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
     let self_z = &state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH];
 
-    let b = [
-        E::from(B[0]),
-        E::from(B[1]),
-        E::from(B[2]),
-        E::from(B[3]),
-        E::from(B[4]),
-        E::from(B[5]),
+    let b3 = [
+        E::from(B3[0]),
+        E::from(B3[1]),
+        E::from(B3[2]),
+        E::from(B3[3]),
+        E::from(B3[4]),
+        E::from(B3[5]),
     ];
-    let b3 = add_fp6(&b, &add_fp6(&b, &b));
 
     let t0 = square_fp6(self_x);
     let t1 = square_fp6(self_y);
@@ -259,15 +258,14 @@ fn compute_add<E: FieldElement + From<BaseElement>>(state: &mut [E], point: &[E]
     let rhs_y = &point[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
     let rhs_z = &point[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH];
 
-    let b = [
-        E::from(B[0]),
-        E::from(B[1]),
-        E::from(B[2]),
-        E::from(B[3]),
-        E::from(B[4]),
-        E::from(B[5]),
+    let b3 = [
+        E::from(B3[0]),
+        E::from(B3[1]),
+        E::from(B3[2]),
+        E::from(B3[3]),
+        E::from(B3[4]),
+        E::from(B3[5]),
     ];
-    let b3 = add_fp6(&b, &add_fp6(&b, &b));
 
     let t0 = mul_fp6(self_x, rhs_x);
     let t1 = mul_fp6(self_y, rhs_y);
