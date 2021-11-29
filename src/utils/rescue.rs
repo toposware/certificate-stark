@@ -44,7 +44,7 @@ pub const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LENGTH] = [
 // TYPES AND INTERFACES
 // ================================================================================================
 
-pub struct Rescue252 {
+pub struct Rescue63 {
     state: [BaseElement; STATE_WIDTH],
     idx: usize,
 }
@@ -52,14 +52,14 @@ pub struct Rescue252 {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub struct Hash([BaseElement; DIGEST_SIZE]);
 
-// RESCUE252 IMPLEMENTATION
+// Rescue63 IMPLEMENTATION
 // ================================================================================================
 
-impl Rescue252 {
+impl Rescue63 {
     /// Returns a new hasher with the state initialized to all zeros.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Rescue252 {
+        Rescue63 {
             state: [BaseElement::ZERO; STATE_WIDTH],
             idx: 0,
         }
@@ -123,7 +123,7 @@ impl Rescue252 {
 // HASHER IMPLEMENTATION
 // ================================================================================================
 
-impl Hasher for Rescue252 {
+impl Hasher for Rescue63 {
     type Digest = Hash;
 
     fn hash(_bytes: &[u8]) -> Self::Digest {

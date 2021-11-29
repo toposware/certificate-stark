@@ -7,7 +7,7 @@ pub mod merkle;
 pub mod range;
 pub mod schnorr;
 pub mod utils;
-use utils::rescue::{Rescue252, RATE_WIDTH};
+use utils::rescue::{Rescue63, RATE_WIDTH};
 
 mod air;
 use air::{PublicInputs, TransactionAir};
@@ -212,12 +212,12 @@ impl TransactionMetadata {
             val[AFFINE_POINT_WIDTH] = value1;
             val[AFFINE_POINT_WIDTH + 1] = value2;
             values.push(val);
-            leaves.push(Rescue252::merge(&[
+            leaves.push(Rescue63::merge(&[
                 Hash::new(val[0], val[1], val[2], val[3], val[4], val[5], val[6]),
                 Hash::new(val[7], val[8], val[9], val[10], val[11], val[12], val[13]),
             ]));
         }
-        let mut tree = MerkleTree::<Rescue252>::new(leaves.clone()).unwrap();
+        let mut tree = MerkleTree::<Rescue63>::new(leaves.clone()).unwrap();
         debug!(
             "Built Merkle tree of depth {} in {} ms",
             MERKLE_TREE_DEPTH,
@@ -271,7 +271,7 @@ impl TransactionMetadata {
             values[s_index][AFFINE_POINT_WIDTH] -= delta;
             values[s_index][AFFINE_POINT_WIDTH + 1] += BaseElement::ONE;
             values[r_index][AFFINE_POINT_WIDTH] += delta;
-            leaves[s_index] = Rescue252::merge(&[
+            leaves[s_index] = Rescue63::merge(&[
                 Hash::new(
                     values[s_index][0],
                     values[s_index][1],
@@ -291,7 +291,7 @@ impl TransactionMetadata {
                     values[s_index][13],
                 ),
             ]);
-            leaves[r_index] = Rescue252::merge(&[
+            leaves[r_index] = Rescue63::merge(&[
                 Hash::new(
                     values[r_index][0],
                     values[r_index][1],
@@ -321,7 +321,7 @@ impl TransactionMetadata {
         debug!(
             "Updated Merkle tree with {} transactions to root {} in {} ms",
             num_transactions,
-            hex::encode(<<Rescue252 as Hasher>::Digest>::as_bytes(&final_root)),
+            hex::encode(<<Rescue63 as Hasher>::Digest>::as_bytes(&final_root)),
             now.elapsed().as_millis(),
         );
 

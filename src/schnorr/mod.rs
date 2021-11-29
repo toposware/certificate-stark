@@ -20,7 +20,7 @@ use winterfell::{
 use super::utils::{
     ecc::{self, AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH},
     field,
-    rescue::{self, Rescue252, RATE_WIDTH as HASH_RATE_WIDTH},
+    rescue::{self, Rescue63, RATE_WIDTH as HASH_RATE_WIDTH},
 };
 
 pub mod constants;
@@ -216,11 +216,11 @@ fn hash_message(
     input: [BaseElement; POINT_COORDINATE_WIDTH],
     message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
 ) -> [BaseElement; HASH_RATE_WIDTH] {
-    let mut h = Rescue252::digest(&input);
+    let mut h = Rescue63::digest(&input);
     let mut message_chunk = rescue::Hash::new(
         message[0], message[1], message[2], message[3], message[4], message[5], message[6],
     );
-    h = Rescue252::merge(&[h, message_chunk]);
+    h = Rescue63::merge(&[h, message_chunk]);
     message_chunk = rescue::Hash::new(
         message[7],
         message[8],
@@ -230,7 +230,7 @@ fn hash_message(
         message[12],
         message[13],
     );
-    h = Rescue252::merge(&[h, message_chunk]);
+    h = Rescue63::merge(&[h, message_chunk]);
     message_chunk = rescue::Hash::new(
         message[14],
         message[15],
@@ -240,7 +240,7 @@ fn hash_message(
         message[19],
         message[20],
     );
-    h = Rescue252::merge(&[h, message_chunk]);
+    h = Rescue63::merge(&[h, message_chunk]);
     message_chunk = rescue::Hash::new(
         message[21],
         message[22],
@@ -250,7 +250,7 @@ fn hash_message(
         message[26],
         message[27],
     );
-    h = Rescue252::merge(&[h, message_chunk]);
+    h = Rescue63::merge(&[h, message_chunk]);
 
     h.to_elements()
 }
