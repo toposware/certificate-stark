@@ -42,10 +42,7 @@ impl Air for RangeProofAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        let degrees = vec![
-            TransitionConstraintDegree::new(2),
-            TransitionConstraintDegree::new(1),
-        ];
+        let degrees = transition_constraint_degrees();
         assert_eq!(TRACE_WIDTH, trace_info.width());
         RangeProofAir {
             context: AirContext::new(trace_info, degrees, options),
@@ -93,6 +90,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
 ) {
     // Enforce a step of double-and-add in the field
     field::enforce_double_and_add_step(result, current, next, 1, 0, FieldElement::ONE);
+}
+
+pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
+    vec![
+        TransitionConstraintDegree::new(2),
+        TransitionConstraintDegree::new(1),
+    ]
 }
 
 // TRACE BUILDER

@@ -40,37 +40,7 @@ impl Air for MerkleAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        // Constraint degrees for enforcement of Rescue hash rounds
-        let mut hash_constraint_degrees =
-            vec![
-                TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]);
-                HASH_STATE_WIDTH
-            ];
-
-        // Constraint degrees of authentication paths for a Merkle tree update
-        let mut update_auth_degrees = Vec::new();
-        // Initial value hash constraints
-        update_auth_degrees.append(&mut hash_constraint_degrees.clone());
-        // Bits of index into Merkle tree
-        update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
-            2,
-            vec![TRANSACTION_CYCLE_LENGTH],
-        ));
-        // Initial value hash constraints
-        update_auth_degrees.append(&mut hash_constraint_degrees);
-
-        // Degrees for all constraints
-        let mut degrees = Vec::new();
-        // Authentication paths for updating sender and receiver
-        degrees.append(&mut update_auth_degrees.clone());
-        degrees.append(&mut update_auth_degrees);
-        // Remaining constraints (prev root copy, balance update, intermediate root match, and prev root match)
-        let mut remaining_degrees =
-            vec![
-                TransitionConstraintDegree::with_cycles(1, vec![TRANSACTION_CYCLE_LENGTH]);
-                PREV_TREE_MATCH_RES + HASH_RATE_WIDTH - PREV_TREE_ROOT_RES
-            ];
-        degrees.append(&mut remaining_degrees);
+        let degrees = transition_constraint_degrees(TRANSACTION_CYCLE_LENGTH);
 
         assert_eq!(TRACE_WIDTH, trace_info.width());
         MerkleAir {
@@ -390,4 +360,34 @@ pub fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
             not_bit * are_equal(next[HASH_STATE_WIDTH + 1 + i], next[i]),
         );
     }
+}
+
+pub fn transition_constraint_degrees(cycle_length: usize) -> Vec<TransitionConstraintDegree> {
+    // Constraint degrees for enforcement of Rescue hash rounds
+    let mut hash_constraint_degrees =
+        vec![TransitionConstraintDegree::with_cycles(3, vec![cycle_length]); HASH_STATE_WIDTH];
+
+    // Constraint degrees of authentication paths for a Merkle tree update
+    let mut update_auth_degrees = hash_constraint_degrees.clone();
+    // Bits of index into Merkle tree
+    update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
+        2,
+        vec![cycle_length],
+    ));
+
+    // Initial value hash constraints
+    update_auth_degrees.append(&mut hash_constraint_degrees);
+
+    // Remaining constraints (prev root copy, balance update, intermediate root match, and prev root match)
+    let mut remaining_degrees = vec![
+        TransitionConstraintDegree::with_cycles(1, vec![cycle_length]);
+        PREV_TREE_MATCH_RES + HASH_RATE_WIDTH - PREV_TREE_ROOT_RES
+    ];
+
+    // Degrees for all constraints
+    let mut degrees = update_auth_degrees.clone();
+    degrees.append(&mut update_auth_degrees);
+    degrees.append(&mut remaining_degrees);
+
+    degrees
 }

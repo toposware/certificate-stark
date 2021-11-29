@@ -14,8 +14,8 @@ pub mod constants;
 use constants::{HASH_RATE_WIDTH, MERKLE_TREE_DEPTH};
 mod trace;
 pub use trace::{build_trace, init_merkle_update_state, update_merkle_update_state};
-pub mod air;
-pub use air::{evaluate_constraints, periodic_columns};
+mod air;
+pub use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{MerkleAir, PublicInputs};
 
 #[cfg(test)]

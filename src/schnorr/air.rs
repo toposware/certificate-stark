@@ -45,61 +45,7 @@ impl Air for SchnorrAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        let bit_degree = if pub_inputs.signatures.len() == 1 {
-            3
-        } else {
-            5
-        };
-        let mut degrees = vec![
-            // First scalar multiplication
-            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(5, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(4, vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(2, vec![SIG_CYCLE_LENGTH]),
-        ];
-        // Second scalar multiplication
-        for _ in 0..PROJECTIVE_POINT_WIDTH {
-            degrees.push(TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
-            ));
-        }
-        degrees.push(TransitionConstraintDegree::with_cycles(
-            2,
-            vec![SIG_CYCLE_LENGTH],
-        ));
-        for _ in 1..4 {
-            degrees.push(TransitionConstraintDegree::with_cycles(
-                1,
-                vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
-            ));
-        }
-        // Rescue hash
-        degrees.push(TransitionConstraintDegree::with_cycles(
-            1,
-            vec![SIG_CYCLE_LENGTH, SIG_CYCLE_LENGTH],
-        ));
-        for _ in 0..HASH_STATE_WIDTH {
-            degrees.push(TransitionConstraintDegree::with_cycles(
-                3,
-                vec![SIG_CYCLE_LENGTH],
-            ));
-        }
+        let degrees = transition_constraint_degrees(pub_inputs.signatures.len(), SIG_CYCLE_LENGTH);
         assert_eq!(TRACE_WIDTH, trace_info.width());
         SchnorrAir {
             context: AirContext::new(trace_info, degrees, options),
@@ -567,6 +513,60 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             ),
         );
     }
+}
+
+pub fn transition_constraint_degrees(
+    num_tx: usize,
+    cycle_length: usize,
+) -> Vec<TransitionConstraintDegree> {
+    let bit_degree = if num_tx == 1 { 3 } else { 5 };
+
+    // First scalar multiplication
+    let mut degrees =
+        vec![
+            TransitionConstraintDegree::with_cycles(5, vec![cycle_length, cycle_length]);
+            POINT_COORDINATE_WIDTH
+        ];
+
+    // The x coordinate also stores the final point reduction, hence the first degrees are higher
+    for _ in 0..AFFINE_POINT_WIDTH {
+        degrees.push(TransitionConstraintDegree::with_cycles(
+            4,
+            vec![cycle_length, cycle_length],
+        ));
+    }
+    degrees.push(TransitionConstraintDegree::with_cycles(
+        2,
+        vec![cycle_length],
+    ));
+
+    // Second scalar multiplication
+    for _ in 0..PROJECTIVE_POINT_WIDTH {
+        degrees.push(TransitionConstraintDegree::with_cycles(
+            bit_degree,
+            vec![cycle_length, cycle_length],
+        ));
+    }
+    degrees.push(TransitionConstraintDegree::with_cycles(
+        2,
+        vec![cycle_length],
+    ));
+
+    // Rescue hash
+    for _ in 0..4 {
+        degrees.push(TransitionConstraintDegree::with_cycles(
+            1,
+            vec![cycle_length, cycle_length],
+        ));
+    }
+    for _ in 0..HASH_STATE_WIDTH {
+        degrees.push(TransitionConstraintDegree::with_cycles(
+            3,
+            vec![cycle_length],
+        ));
+    }
+
+    degrees
 }
 
 // TODO: Maybe simplify signature definition a little

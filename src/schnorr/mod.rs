@@ -30,7 +30,7 @@ pub use trace::{
 };
 
 mod air;
-pub use air::{evaluate_constraints, periodic_columns};
+pub use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{PublicInputs, SchnorrAir};
 
 #[cfg(test)]

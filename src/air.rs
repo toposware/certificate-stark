@@ -4,8 +4,8 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::constants::merkle_const::{
-    BALANCE_CONSTRAINT_RES, HASH_RATE_WIDTH, HASH_STATE_WIDTH, NONCE_UPDATE_CONSTRAINT_RES,
-    PREV_TREE_MATCH_RES, PREV_TREE_ROOT_POS, PREV_TREE_ROOT_RES, RECEIVER_INITIAL_POS,
+    BALANCE_CONSTRAINT_RES, HASH_RATE_WIDTH, HASH_STATE_WIDTH, INT_ROOT_EQUALITY_RES,
+    NONCE_UPDATE_CONSTRAINT_RES, PREV_TREE_ROOT_POS, RECEIVER_BIT_POS, RECEIVER_INITIAL_POS,
     RECEIVER_UPDATED_POS, SENDER_INITIAL_POS, SENDER_UPDATED_POS,
     TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH, TRANSACTION_HASH_LENGTH,
     VALUE_CONSTRAINT_RES,
@@ -69,221 +69,14 @@ impl Air for TransactionAir {
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
         // Constraint degrees for enforcement of Rescue hash rounds
-        let mut hash_constraint_degrees =
-            vec![
-                TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]);
-                HASH_STATE_WIDTH
-            ];
-
-        // Constraint degrees of authentication paths for a Merkle tree update
-        let mut update_auth_degrees = Vec::new();
-        // Initial value hash constraints
-        update_auth_degrees.append(&mut hash_constraint_degrees.clone());
-        // Bits of index into Merkle tree
-        update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
-            3,
-            vec![TRANSACTION_CYCLE_LENGTH],
-        ));
-        // Initial value hash constraints
-        update_auth_degrees.append(&mut hash_constraint_degrees);
-
-        // Degrees for all constraints
-        let mut degrees = Vec::new();
-        // Authentication paths for updating sender and receiver
-        degrees.append(&mut update_auth_degrees.clone());
-        degrees.append(&mut update_auth_degrees);
-        // Remaining constraints (prev root copy, balance update, intermediate root match, and prev root match)
-        let mut remaining_degrees =
-            vec![
-                TransitionConstraintDegree::with_cycles(1, vec![TRANSACTION_CYCLE_LENGTH]);
-                PREV_TREE_MATCH_RES + HASH_RATE_WIDTH - PREV_TREE_ROOT_RES
-            ];
-        remaining_degrees[PREV_TREE_MATCH_RES - PREV_TREE_ROOT_RES - HASH_RATE_WIDTH] =
+        let mut degrees = merkle::update::transition_constraint_degrees(TRANSACTION_CYCLE_LENGTH);
+        // The constraint at the receiver position has higher degree than in Merkle sub-AIR program
+        degrees[RECEIVER_BIT_POS] =
+            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]);
+        degrees[INT_ROOT_EQUALITY_RES] =
             TransitionConstraintDegree::with_cycles(2, vec![TRANSACTION_CYCLE_LENGTH]);
-        degrees.append(&mut remaining_degrees);
-        let bit_degree = 5;
-        let schnorr_degrees = vec![
-            // First scalar multiplication
-            TransitionConstraintDegree::with_cycles(
-                5,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                5,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                5,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                5,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                5,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                5,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                4,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(2, vec![TRANSACTION_CYCLE_LENGTH]),
-            // Second scalar multiplication
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                bit_degree,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(2, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(
-                1,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                1,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(
-                1,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            // Rescue hash
-            TransitionConstraintDegree::with_cycles(
-                1,
-                vec![TRANSACTION_CYCLE_LENGTH, TRANSACTION_CYCLE_LENGTH],
-            ),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-            TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]),
-        ];
 
+        let schnorr_degrees = schnorr::transition_constraint_degrees(2, TRANSACTION_CYCLE_LENGTH);
         // Update the constraint degrees with the ones for Schnorr
         for index in 0..PROJECTIVE_POINT_WIDTH {
             degrees[index] = schnorr_degrees[index].clone();

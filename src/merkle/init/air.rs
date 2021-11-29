@@ -44,10 +44,7 @@ impl Air for PreMerkleAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        let mut degrees = Vec::with_capacity(HASH_STATE_WIDTH * 4);
-        for _ in 0..HASH_STATE_WIDTH * 4 {
-            degrees.push(TransitionConstraintDegree::new(3));
-        }
+        let degrees = transition_constraint_degrees();
 
         assert_eq!(TRACE_WIDTH, trace_info.width());
         PreMerkleAir {
@@ -196,4 +193,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         ark,
         transaction_setup_flag,
     );
+}
+
+pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
+    let mut degrees = Vec::with_capacity(HASH_STATE_WIDTH * 4);
+    for _ in 0..HASH_STATE_WIDTH * 4 {
+        degrees.push(TransitionConstraintDegree::new(3));
+    }
+
+    degrees
 }

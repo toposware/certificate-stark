@@ -10,8 +10,8 @@ use winterfell::{
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 
-pub mod air;
-pub use air::{evaluate_constraints, periodic_columns};
+mod air;
+pub use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{PreMerkleAir, PublicInputs};
 
 pub mod constants;
