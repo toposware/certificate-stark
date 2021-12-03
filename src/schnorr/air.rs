@@ -456,7 +456,8 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             flag * doubling_flag, // Do not repeat it twice
         );
     }
-    // Enforce temporary accumulators copy between steps
+
+    // Enforce temporary accumulators copy between double-and-add steps
     for i in 0..4 {
         result.agg_constraint(
             2 * PROJECTIVE_POINT_WIDTH + 2 + i,
@@ -464,6 +465,18 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
             are_equal(
                 current[2 * PROJECTIVE_POINT_WIDTH + 2 + i],
                 next[2 * PROJECTIVE_POINT_WIDTH + 2 + i],
+            ),
+        );
+    }
+
+    // Enforce also copy for hash digest words cells outside of double-and-add steps
+    for (i, &flag) in hash_digest_register_flag.iter().enumerate().take(4) {
+        result.agg_constraint(
+            2 * PROJECTIVE_POINT_WIDTH + 5 - i,
+            not(flag) * doubling_flag,
+            are_equal(
+                current[2 * PROJECTIVE_POINT_WIDTH + 5 - i],
+                next[2 * PROJECTIVE_POINT_WIDTH + 5 - i],
             ),
         );
     }
