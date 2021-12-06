@@ -3,15 +3,17 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+pub use crate::utils::ecc::AFFINE_POINT_WIDTH;
 pub use crate::utils::rescue::{
-    HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS, STATE_WIDTH as HASH_STATE_WIDTH,
+    HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS, RATE_WIDTH as HASH_RATE_WIDTH,
+    STATE_WIDTH as HASH_STATE_WIDTH,
 };
 
 // CONSTANTS USED IN MERKLE INITIALIZATION AND AUTHENTICATION
 // ================================================================================================
 
 /// Total number of registers in the trace
-pub const TRACE_WIDTH: usize = 4 * HASH_STATE_WIDTH + 4;
+pub const TRACE_WIDTH: usize = PREV_TREE_ROOT_POS + HASH_RATE_WIDTH;
 /// The depth to a leaf in the Merkle tree to be used when testing
 #[cfg(test)]
 pub const MERKLE_TREE_DEPTH: usize = 3;
@@ -49,10 +51,10 @@ pub const PREV_TREE_ROOT_RES: usize = 4 * HASH_STATE_WIDTH + 2;
 /// Beginning index of constraints for unchanged values
 pub const VALUE_CONSTRAINT_RES: usize = TRACE_WIDTH;
 /// Index of constraint for balance update equality
-pub const BALANCE_CONSTRAINT_RES: usize = TRACE_WIDTH + 5;
+pub const BALANCE_CONSTRAINT_RES: usize = TRACE_WIDTH + AFFINE_POINT_WIDTH * 2 + 1;
 /// Index of constraint for updating the sender's nonce
-pub const NONCE_UPDATE_CONSTRAINT_RES: usize = TRACE_WIDTH + 6;
+pub const NONCE_UPDATE_CONSTRAINT_RES: usize = BALANCE_CONSTRAINT_RES + 1;
 /// Beginning index of intermediate tree root equality constraints
-pub const INT_ROOT_EQUALITY_RES: usize = TRACE_WIDTH + 7;
+pub const INT_ROOT_EQUALITY_RES: usize = NONCE_UPDATE_CONSTRAINT_RES + 1;
 /// Beginning index of constraints for previous tree root matching
-pub const PREV_TREE_MATCH_RES: usize = TRACE_WIDTH + 9;
+pub const PREV_TREE_MATCH_RES: usize = INT_ROOT_EQUALITY_RES + HASH_RATE_WIDTH;

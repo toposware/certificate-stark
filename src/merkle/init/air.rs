@@ -8,7 +8,7 @@ use crate::utils::rescue;
 use super::constants::*;
 
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
@@ -17,8 +17,8 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub s_inputs: [BaseElement; 4],
-    pub r_inputs: [BaseElement; 4],
+    pub s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    pub r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     pub delta: BaseElement,
 }
 
@@ -32,8 +32,8 @@ impl Serializable for PublicInputs {
 
 pub struct PreMerkleAir {
     context: AirContext<BaseElement>,
-    s_inputs: [BaseElement; 4],
-    r_inputs: [BaseElement; 4],
+    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
 }
 
@@ -44,24 +44,8 @@ impl Air for PreMerkleAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        let degrees = vec![
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-            TransitionConstraintDegree::new(3),
-        ];
+        let degrees = transition_constraint_degrees();
+
         assert_eq!(TRACE_WIDTH, trace_info.width());
         PreMerkleAir {
             context: AirContext::new(trace_info, degrees, options),
@@ -94,29 +78,64 @@ impl Air for PreMerkleAir {
     }
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
-        vec![
-            //check initial values agains public inputs
-            Assertion::single(SENDER_INITIAL_POS, 0, self.s_inputs[0]),
-            Assertion::single(SENDER_INITIAL_POS + 1, 0, self.s_inputs[1]),
-            Assertion::single(SENDER_INITIAL_POS + 2, 0, self.s_inputs[2]),
-            Assertion::single(SENDER_INITIAL_POS + 3, 0, self.s_inputs[3]),
-            Assertion::single(SENDER_UPDATED_POS, 0, self.s_inputs[0]),
-            Assertion::single(SENDER_UPDATED_POS + 1, 0, self.s_inputs[1]),
-            Assertion::single(SENDER_UPDATED_POS + 2, 0, self.s_inputs[2] - self.delta),
-            Assertion::single(
-                SENDER_UPDATED_POS + 3,
+        let mut assertions = vec![];
+        //check initial sender values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH + 2 {
+            assertions.push(Assertion::single(
+                SENDER_INITIAL_POS + i,
                 0,
-                self.s_inputs[3] + BaseElement::ONE,
-            ),
-            Assertion::single(RECEIVER_INITIAL_POS, 0, self.r_inputs[0]),
-            Assertion::single(RECEIVER_INITIAL_POS + 1, 0, self.r_inputs[1]),
-            Assertion::single(RECEIVER_INITIAL_POS + 2, 0, self.r_inputs[2]),
-            Assertion::single(RECEIVER_INITIAL_POS + 3, 0, self.r_inputs[3]),
-            Assertion::single(RECEIVER_UPDATED_POS, 0, self.r_inputs[0]),
-            Assertion::single(RECEIVER_UPDATED_POS + 1, 0, self.r_inputs[1]),
-            Assertion::single(RECEIVER_UPDATED_POS + 2, 0, self.r_inputs[2] + self.delta),
-            Assertion::single(RECEIVER_UPDATED_POS + 3, 0, self.r_inputs[3]),
-        ]
+                self.s_inputs[i],
+            ));
+        }
+
+        //check updated sender values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH {
+            assertions.push(Assertion::single(
+                SENDER_UPDATED_POS + i,
+                0,
+                self.s_inputs[i],
+            ));
+        }
+        assertions.push(Assertion::single(
+            SENDER_UPDATED_POS + AFFINE_POINT_WIDTH,
+            0,
+            self.s_inputs[AFFINE_POINT_WIDTH] - self.delta,
+        ));
+        assertions.push(Assertion::single(
+            SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1,
+            0,
+            self.s_inputs[AFFINE_POINT_WIDTH + 1] + BaseElement::ONE,
+        ));
+
+        //check initial receiver values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH + 2 {
+            assertions.push(Assertion::single(
+                RECEIVER_INITIAL_POS + i,
+                0,
+                self.r_inputs[i],
+            ));
+        }
+
+        //check updated receiver values against public inputs
+        for i in 0..AFFINE_POINT_WIDTH {
+            assertions.push(Assertion::single(
+                RECEIVER_UPDATED_POS + i,
+                0,
+                self.r_inputs[i],
+            ));
+        }
+        assertions.push(Assertion::single(
+            RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH,
+            0,
+            self.r_inputs[AFFINE_POINT_WIDTH] + self.delta,
+        ));
+        assertions.push(Assertion::single(
+            RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 1,
+            0,
+            self.r_inputs[AFFINE_POINT_WIDTH + 1],
+        ));
+
+        assertions
     }
 
     fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
@@ -174,4 +193,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         ark,
         transaction_setup_flag,
     );
+}
+
+pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
+    let mut degrees = Vec::with_capacity(HASH_STATE_WIDTH * 4);
+    for _ in 0..HASH_STATE_WIDTH * 4 {
+        degrees.push(TransitionConstraintDegree::new(3));
+    }
+
+    degrees
 }

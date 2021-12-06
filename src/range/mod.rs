@@ -6,7 +6,7 @@
 use log::debug;
 use std::time::Instant;
 use winterfell::{
-    math::{fields::f252::BaseElement, log2},
+    math::{fields::f63::BaseElement, log2},
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 
@@ -15,7 +15,7 @@ use super::utils::field;
 mod air;
 pub use air::{
     build_trace, evaluate_constraints, init_range_verification_state,
-    update_range_verification_state, TRACE_WIDTH,
+    transition_constraint_degrees, update_range_verification_state, TRACE_WIDTH,
 };
 use air::{PublicInputs, RangeProofAir};
 

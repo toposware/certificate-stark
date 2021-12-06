@@ -7,27 +7,27 @@ use super::{are_equal, EvaluationResult};
 use core::slice;
 use winterfell::{
     crypto::{Digest, Hasher},
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     ByteReader, ByteWriter, Deserializable, DeserializationError, Serializable,
 };
 
 // CONSTANTS
 // ================================================================================================
 
-/// Function state is set to 4 field elements or 128 bytes; 2 elements are reserved for rate
-/// and 2 elements are reserved for capacity.
-pub const STATE_WIDTH: usize = 4;
-pub const RATE_WIDTH: usize = 2;
+/// Function state is set to 14 field elements or 112 bytes; 7 elements are reserved for rate
+/// and 7 elements are reserved for capacity.
+pub const STATE_WIDTH: usize = 14;
+pub const RATE_WIDTH: usize = 7;
 
-/// Two elements (64-bytes) are returned as digest.
-const DIGEST_SIZE: usize = 2;
+/// Seven elements (56-bytes) are returned as digest.
+const DIGEST_SIZE: usize = 7;
 
-/// The number of rounds is set to 7 to provide 128-bit security level with 50% security margin;
+/// The number of rounds is set to 7 to provide 128-bit security level with 40% security margin;
 /// computed using algorithm 7 from <https://eprint.iacr.org/2020/1143.pdf>
-pub const NUM_HASH_ROUNDS: usize = 14;
+pub const NUM_HASH_ROUNDS: usize = 7;
 
 /// Minimum cycle length required to describe Rescue permutation.
-pub const HASH_CYCLE_LENGTH: usize = 16;
+pub const HASH_CYCLE_LENGTH: usize = 8;
 
 /// Specifies steps on which Rescue transition function is applied.
 pub const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LENGTH] = [
@@ -38,21 +38,13 @@ pub const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LENGTH] = [
     BaseElement::ONE,
     BaseElement::ONE,
     BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ONE,
-    BaseElement::ZERO,
     BaseElement::ZERO,
 ];
 
 // TYPES AND INTERFACES
 // ================================================================================================
 
-pub struct Rescue252 {
+pub struct Rescue63 {
     state: [BaseElement; STATE_WIDTH],
     idx: usize,
 }
@@ -60,14 +52,14 @@ pub struct Rescue252 {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub struct Hash([BaseElement; DIGEST_SIZE]);
 
-// RESCUE128 IMPLEMENTATION
+// Rescue63 IMPLEMENTATION
 // ================================================================================================
 
-impl Rescue252 {
+impl Rescue63 {
     /// Returns a new hasher with the state initialized to all zeros.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Rescue252 {
+        Rescue63 {
             state: [BaseElement::ZERO; STATE_WIDTH],
             idx: 0,
         }
@@ -91,7 +83,15 @@ impl Rescue252 {
             // TODO: apply proper padding
             apply_permutation(&mut self.state);
         }
-        Hash([self.state[0], self.state[1]])
+        Hash([
+            self.state[0],
+            self.state[1],
+            self.state[2],
+            self.state[3],
+            self.state[4],
+            self.state[5],
+            self.state[6],
+        ])
     }
 
     /// Returns hash of the provided data.
@@ -114,14 +114,16 @@ impl Rescue252 {
             apply_permutation(&mut state);
         }
 
-        Hash([state[0], state[1]])
+        Hash([
+            state[0], state[1], state[2], state[3], state[4], state[5], state[6],
+        ])
     }
 }
 
 // HASHER IMPLEMENTATION
 // ================================================================================================
 
-impl Hasher for Rescue252 {
+impl Hasher for Rescue63 {
     type Digest = Hash;
 
     fn hash(_bytes: &[u8]) -> Self::Digest {
@@ -130,11 +132,13 @@ impl Hasher for Rescue252 {
 
     fn merge(values: &[Self::Digest; 2]) -> Self::Digest {
         let mut state = [BaseElement::ZERO; STATE_WIDTH];
-        state[..2].copy_from_slice(&values[0].to_elements());
-        state[2..4].copy_from_slice(&values[1].to_elements());
+        state[..STATE_WIDTH - RATE_WIDTH].copy_from_slice(&values[0].to_elements());
+        state[STATE_WIDTH - RATE_WIDTH..STATE_WIDTH].copy_from_slice(&values[1].to_elements());
         apply_permutation(&mut state);
 
-        Hash([state[0], state[1]])
+        Hash([
+            state[0], state[1], state[2], state[3], state[4], state[5], state[6],
+        ])
     }
 
     fn merge_with_int(_seed: Self::Digest, _value: u64) -> Self::Digest {
@@ -146,16 +150,26 @@ impl Hasher for Rescue252 {
 // ================================================================================================
 
 impl Hash {
-    pub fn new(v1: BaseElement, v2: BaseElement) -> Self {
-        Hash([v1, v2])
+    pub fn new(
+        v1: BaseElement,
+        v2: BaseElement,
+        v3: BaseElement,
+        v4: BaseElement,
+        v5: BaseElement,
+        v6: BaseElement,
+        v7: BaseElement,
+    ) -> Self {
+        Hash([v1, v2, v3, v4, v5, v6, v7])
     }
 
     #[allow(dead_code)]
     #[allow(clippy::wrong_self_convention)]
-    pub fn to_bytes(&self) -> [u8; 64] {
-        let mut bytes = [0; 64];
-        bytes[..32].copy_from_slice(&self.0[0].to_bytes());
-        bytes[32..].copy_from_slice(&self.0[1].to_bytes());
+    pub fn to_bytes(&self) -> [u8; 112] {
+        let mut bytes = [0; 112];
+        for i in 0..STATE_WIDTH {
+            bytes[i * 8..8 + i * 8].copy_from_slice(&self.0[i].to_bytes());
+        }
+
         bytes
     }
 
@@ -173,9 +187,9 @@ impl Hash {
 
 impl Digest for Hash {
     fn as_bytes(&self) -> [u8; 32] {
-        // F252 elements are each 32-bytes long,
-        // so we take the first element of the Digest
-        let bytes = BaseElement::elements_as_bytes(&self.0[..1]);
+        // Cheetah elements are each 8-bytes long,
+        // so we take the first four elements of the Digest
+        let bytes = BaseElement::elements_as_bytes(&self.0[..4]);
         let mut result = [0; 32];
         result[..bytes.len()].copy_from_slice(bytes);
         result
@@ -184,8 +198,7 @@ impl Digest for Hash {
 
 impl Serializable for Hash {
     fn write_into<W: ByteWriter>(&self, target: &mut W) {
-        target.write(self.0[0]);
-        target.write(self.0[1]);
+        target.write(&self.0[..]);
     }
 }
 
@@ -193,7 +206,12 @@ impl Deserializable for Hash {
     fn read_from<R: ByteReader>(source: &mut R) -> Result<Self, DeserializationError> {
         let v1 = BaseElement::read_from(source)?;
         let v2 = BaseElement::read_from(source)?;
-        Ok(Self([v1, v2]))
+        let v3 = BaseElement::read_from(source)?;
+        let v4 = BaseElement::read_from(source)?;
+        let v5 = BaseElement::read_from(source)?;
+        let v6 = BaseElement::read_from(source)?;
+        let v7 = BaseElement::read_from(source)?;
+        Ok(Self([v1, v2, v3, v4, v5, v6, v7]))
     }
 }
 
@@ -202,7 +220,7 @@ impl Deserializable for Hash {
 
 /// Applies Rescue-XLIX permutation to the provided state.
 pub fn apply_permutation(state: &mut [BaseElement; STATE_WIDTH]) {
-    // apply round function 14 times; this provides 128-bit security with 50% security margin
+    // apply round function 7 times; this provides 128-bit security with 40% security margin
     for i in 0..NUM_HASH_ROUNDS {
         apply_round(state, i);
     }
@@ -294,7 +312,8 @@ pub fn get_round_constants() -> Vec<Vec<BaseElement>> {
 #[allow(clippy::needless_range_loop)]
 fn apply_sbox<E: FieldElement>(state: &mut [E]) {
     for i in 0..STATE_WIDTH {
-        // ALPHA = 3
+        // ALPHA = 3 hence rely on faster exponentiation
+        // through squaring and multiplication
         state[i] *= state[i].square();
     }
 }
@@ -303,7 +322,7 @@ fn apply_sbox<E: FieldElement>(state: &mut [E]) {
 #[allow(clippy::needless_range_loop)]
 fn apply_inv_sbox(state: &mut [BaseElement]) {
     for i in 0..STATE_WIDTH {
-        state[i] = state[i].exp(INV_ALPHA.into());
+        state[i] = state[i].exp(INV_ALPHA);
     }
 }
 
@@ -347,912 +366,616 @@ fn apply_inv_mds<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
 #[allow(unused)]
 const ALPHA: u32 = 3;
 
-const INV_ALPHA: [u64; 4] = [
-    0xaaaaaaaaaaaaaaab,
-    0xaaaaaaaaaaaaaaaa,
-    0xaaaaaaaaaaaaaaaa,
-    0x0555555555555560,
-];
+const INV_ALPHA: u64 = 3146514939656186539;
 
 const MDS: [BaseElement; STATE_WIDTH * STATE_WIDTH] = [
-    BaseElement::new([
-        0xfffffffffffffd28,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x0000000000000438,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xfffffffffffffe7b,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x0000000000000028,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xffffffffffff8e19,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x000000000000a5e7,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xffffffffffffc749,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x00000000000004ba,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xfffffffffff28a57,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x0000000000137ec8,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xfffffffffff9728c,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x0000000000008458,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xfffffffffe872169,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x000000000220dd96,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
-    BaseElement::new([
-        0xffffffffff49e0b9,
-        0xffffffffffffffff,
-        0xffffffffffffffff,
-        0x0800000000000010,
-    ]),
-    BaseElement::new([
-        0x00000000000e204b,
-        0x0000000000000000,
-        0x0000000000000000,
-        0x0000000000000000,
-    ]),
+    BaseElement::new(0x13042324ac95f6fe),
+    BaseElement::new(0xbe01d5ef588e5c3),
+    BaseElement::new(0x1ef4a2c3efceb4cf),
+    BaseElement::new(0x3638240da7314106),
+    BaseElement::new(0x22e537b648a5ad8c),
+    BaseElement::new(0x22f7cccb2226a7ca),
+    BaseElement::new(0x326a7ee042a62b01),
+    BaseElement::new(0x95f8bb25d91f5dc),
+    BaseElement::new(0x174861c0af81b09b),
+    BaseElement::new(0x2b6c5235f9dbb74c),
+    BaseElement::new(0xb6cc271a540b037),
+    BaseElement::new(0x3a6747b53b94a78),
+    BaseElement::new(0x417ffeb31960d6ec),
+    BaseElement::new(0x247dbc),
+    BaseElement::new(0x405afc4ab368d06a),
+    BaseElement::new(0xecb9a0524b44b7f),
+    BaseElement::new(0x338f0a6c6ca981d5),
+    BaseElement::new(0x21b54a5ae9742e5b),
+    BaseElement::new(0x12e346b04e369efd),
+    BaseElement::new(0xfef99ffd54b0cb1),
+    BaseElement::new(0x1d29d9654335a319),
+    BaseElement::new(0x22e05613d1cdebbd),
+    BaseElement::new(0x7db192269ca5e0f),
+    BaseElement::new(0xc103f4a3bf43754),
+    BaseElement::new(0x1bb7d874b31d9d41),
+    BaseElement::new(0x3c624af3138defbe),
+    BaseElement::new(0x15b2850478d3de0d),
+    BaseElement::new(0x3e6b401f8fb),
+    BaseElement::new(0x238fb791afaec1e),
+    BaseElement::new(0x2cbeb2d4ff33f1d4),
+    BaseElement::new(0x388b2483c66f6b26),
+    BaseElement::new(0xc2760d9d63cb0e5),
+    BaseElement::new(0x3418d4d4b16f3e6d),
+    BaseElement::new(0xbe4677c0fc16ed),
+    BaseElement::new(0x294bfc3a50aed12b),
+    BaseElement::new(0x3b2e11762294120e),
+    BaseElement::new(0x3d4932933577b970),
+    BaseElement::new(0x3825048a4e592379),
+    BaseElement::new(0x3fe313b11664616b),
+    BaseElement::new(0x5f572294c6925c2),
+    BaseElement::new(0x22af8dc2d8b32404),
+    BaseElement::new(0x210e589ca425455f),
+    BaseElement::new(0x5f3f357ddd6d7fd),
+    BaseElement::new(0x25e671a7e19acee8),
+    BaseElement::new(0x3727fbcb0fd80a8f),
+    BaseElement::new(0x3101aeace9f7eeb1),
+    BaseElement::new(0x3e475a6b07b96950),
+    BaseElement::new(0x359f3cb9c3ed5710),
+    BaseElement::new(0xcb8e29e2e509979),
+    BaseElement::new(0x3d63644c06958740),
+    BaseElement::new(0x24a2965f3292aeca),
+    BaseElement::new(0x23a5d7d5efab270c),
+    BaseElement::new(0x3df05f68b7485fff),
+    BaseElement::new(0x3fbe61aba5b28f69),
+    BaseElement::new(0x1afdb1006ebdab4a),
+    BaseElement::new(0x1a84322f583b0e44),
+    BaseElement::new(0x2d57da2d35d729b3),
+    BaseElement::new(0xba0213b19f13cb4),
+    BaseElement::new(0x31d7357455579de0),
+    BaseElement::new(0xd8bc70859d2afd1),
+    BaseElement::new(0x94be97b51bdccad),
+    BaseElement::new(0x253950f99814a7a1),
+    BaseElement::new(0x1d74d520f83fe7fa),
+    BaseElement::new(0x40f92ef26785f48a),
+    BaseElement::new(0x227fad899eae4fde),
+    BaseElement::new(0x367ac275c9fa5ceb),
+    BaseElement::new(0x39b2178fbb0be45f),
+    BaseElement::new(0x232fdc5bbe213a00),
+    BaseElement::new(0x1b19537fc40a9c8e),
+    BaseElement::new(0x35bc122811949369),
+    BaseElement::new(0x2ac4f4826baa8e8f),
+    BaseElement::new(0x20570a2fb84fa9b6),
+    BaseElement::new(0x1ec2631061312246),
+    BaseElement::new(0x1742684652cfe403),
+    BaseElement::new(0x3f88a8ef8b6f4628),
+    BaseElement::new(0x15ba701ab126998f),
+    BaseElement::new(0x4b24d34f078fc97),
+    BaseElement::new(0x3e28b1461086751e),
+    BaseElement::new(0xdc0bc0a711e9408),
+    BaseElement::new(0x1356d90793fd14ca),
+    BaseElement::new(0x156e995527862213),
+    BaseElement::new(0x2407dc3512482db5),
+    BaseElement::new(0x3e7c616eb7be4487),
+    BaseElement::new(0x1836b266f3c732ed),
+    BaseElement::new(0x350f99f53da3cafa),
+    BaseElement::new(0xc69c87af8c1a885),
+    BaseElement::new(0x31590daa5ec7cabe),
+    BaseElement::new(0x302619829c26a2bc),
+    BaseElement::new(0x2f506f3c716fac87),
+    BaseElement::new(0x383399b9bc142cf),
+    BaseElement::new(0x13dfde5877dda335),
+    BaseElement::new(0x2373a1456e119c30),
+    BaseElement::new(0x22b218e931d10c16),
+    BaseElement::new(0x1fb0a11c2a42363d),
+    BaseElement::new(0x11e229b386b3db63),
+    BaseElement::new(0x23b126c120684246),
+    BaseElement::new(0xc2c515dad30aa2b),
+    BaseElement::new(0x393df2152b2be62d),
+    BaseElement::new(0x9a44c1d89503e95),
+    BaseElement::new(0xf0cac1b2990e952),
+    BaseElement::new(0x187d6b5d8bf3fb5b),
+    BaseElement::new(0x1909d75405265213),
+    BaseElement::new(0x17d353e199a40f98),
+    BaseElement::new(0x2a94b224fc6cce34),
+    BaseElement::new(0x10c4da4dec76391),
+    BaseElement::new(0x1f7906ccdeb751d7),
+    BaseElement::new(0x3c84495e094b820e),
+    BaseElement::new(0xc16fbf7bc390e12),
+    BaseElement::new(0x25daf7925be9afd7),
+    BaseElement::new(0x171287b9fffa30b2),
+    BaseElement::new(0x25f924d11806be93),
+    BaseElement::new(0x3058812a2f05c842),
+    BaseElement::new(0x3dc3f1eb4e09e1df),
+    BaseElement::new(0x1d4e069dd5a7c71e),
+    BaseElement::new(0xff71f684ccd686f),
+    BaseElement::new(0x247b6989e4b479b0),
+    BaseElement::new(0x48ed68c86389739),
+    BaseElement::new(0x7f68ed25f30e2d7),
+    BaseElement::new(0xdd6a8e80d9eeb7e),
+    BaseElement::new(0x18866069fe87d510),
+    BaseElement::new(0x235ab563b5bf0030),
+    BaseElement::new(0x1d9540931893ddf3),
+    BaseElement::new(0x18fadb35de0abeb1),
+    BaseElement::new(0x907f67e2f2938f9),
+    BaseElement::new(0x17ae1297417a4a9d),
+    BaseElement::new(0xa7835919c3b19e2),
+    BaseElement::new(0x4ce1fc3d4b442d4),
+    BaseElement::new(0x271bbb9987e5d0a4),
+    BaseElement::new(0x198dab1e767cda4d),
+    BaseElement::new(0x1d154a8d6c74ae90),
+    BaseElement::new(0x1ce07d726cf38431),
+    BaseElement::new(0x12ace41008c3fd4f),
+    BaseElement::new(0x3319aa93ef23c46b),
+    BaseElement::new(0xda82c06b0c6ead9),
+    BaseElement::new(0x154860c0b0e237ca),
+    BaseElement::new(0x9c9be92b6e8a922),
+    BaseElement::new(0x170e36966587c7a6),
+    BaseElement::new(0x1547992363602a38),
+    BaseElement::new(0x30248cadfdd88ebf),
+    BaseElement::new(0x3a977b1e7c46d165),
+    BaseElement::new(0x1380ecc20c2f2ea1),
+    BaseElement::new(0x23eed3df57e66395),
+    BaseElement::new(0x14be6dbfdbec5f75),
+    BaseElement::new(0x9e7e9756d65e14f),
+    BaseElement::new(0x1731c6503cd8631c),
+    BaseElement::new(0xbf040658a66eeb9),
+    BaseElement::new(0x1e8104996398fcec),
+    BaseElement::new(0x178dbbdb0ef955ff),
+    BaseElement::new(0x2f5e48caf914efce),
+    BaseElement::new(0x2438bc7fa8a1eed5),
+    BaseElement::new(0x12078cb9d5da84f9),
+    BaseElement::new(0x321bfb788088c228),
+    BaseElement::new(0x35b43fccd8806115),
+    BaseElement::new(0xc4a53b5482c0174),
+    BaseElement::new(0x105170952930db5b),
+    BaseElement::new(0x14f8894131607da1),
+    BaseElement::new(0x556ae468bda243f),
+    BaseElement::new(0x23a8dfb64718c7b0),
+    BaseElement::new(0x2213d3cc5cf6aa41),
+    BaseElement::new(0x95b86b8c517e218),
+    BaseElement::new(0x363cc753446eb291),
+    BaseElement::new(0x3e900f20b47c7f6d),
+    BaseElement::new(0x351a24528b99c0a2),
+    BaseElement::new(0x266adef04df7aed7),
+    BaseElement::new(0x326581d73130a96c),
+    BaseElement::new(0x1cce888842391617),
+    BaseElement::new(0x3499d635e0b69065),
+    BaseElement::new(0x3e27635b89d03d66),
+    BaseElement::new(0x3027cd9f2508bbb9),
+    BaseElement::new(0x3d9ecdcfcba44430),
+    BaseElement::new(0x305210ba2921cf87),
+    BaseElement::new(0x387be08b1d2bf320),
+    BaseElement::new(0x37f82c34cd7a85b9),
+    BaseElement::new(0x326891e414fb74f),
+    BaseElement::new(0xfe91d2deeab7f18),
+    BaseElement::new(0x39ac96b9b2384ed2),
+    BaseElement::new(0x2c97c1162d46df54),
+    BaseElement::new(0x8477784d7356777),
+    BaseElement::new(0x1208dfb2dddea9c4),
+    BaseElement::new(0x38f6a6591845c08a),
+    BaseElement::new(0x246e6a67b8e2aca2),
+    BaseElement::new(0xc69e10265d3d4cc),
+    BaseElement::new(0x78c599e195e8d84),
+    BaseElement::new(0x2f723faaeb7fc7b8),
+    BaseElement::new(0x3186707052cf8035),
+    BaseElement::new(0x1e598c4b6bf915e4),
+    BaseElement::new(0xc50d80de78ab27f),
+    BaseElement::new(0x6ed4967ffd05be3),
+    BaseElement::new(0x16ab047643724c3c),
+    BaseElement::new(0x32d95e7fdd60b127),
+    BaseElement::new(0x2e41df2454964bb9),
+    BaseElement::new(0x9510bd7e54cbc8b),
+    BaseElement::new(0x3e1caaf36c179cc2),
+    BaseElement::new(0x25bee32c3ca21837),
+    BaseElement::new(0x1e8c46c6758aa7b2),
+    BaseElement::new(0x2ce425acdc03a3ff),
 ];
 
 const INV_MDS: [BaseElement; STATE_WIDTH * STATE_WIDTH] = [
-    BaseElement::new([
-        0x0a2a5ec3c47f52cf,
-        0x3d51f4232e9ecba1,
-        0x8f3d16c2e09b45af,
-        0x02a06782796baad9,
-    ]),
-    BaseElement::new([
-        0x2938a37fba9ec402,
-        0x03dd91892d34c334,
-        0xb940a044ade7393b,
-        0x009514dcbb7160db,
-    ]),
-    BaseElement::new([
-        0x54844607a629f421,
-        0x507367ab2c74c2fc,
-        0x2560b149f8ebc561,
-        0x0324ee73436072b7,
-    ]),
-    BaseElement::new([
-        0x7818b7b4dab7f510,
-        0x6e5d12a877b7ae2e,
-        0x922197ae7891bbb4,
-        0x01a5952d87c281a4,
-    ]),
-    BaseElement::new([
-        0x019cddfd2a272607,
-        0xb8f5de4315f0fdac,
-        0xde57102aa9007b31,
-        0x077a3158671cdc62,
-    ]),
-    BaseElement::new([
-        0xb27161be7c912d71,
-        0xd5f8aadc3d859fab,
-        0x0cf4fecf876b26e0,
-        0x052dbf9735fe8a64,
-    ]),
-    BaseElement::new([
-        0x3390c5fa865f6df3,
-        0xe21324e2cb616869,
-        0x1a138c78ffe3445a,
-        0x0653d17fe91fe586,
-    ]),
-    BaseElement::new([
-        0x1860fa49d2e83e99,
-        0x8efe51fde127fa3f,
-        0xfaa0648ccfb11992,
-        0x05043d9079c4b3e5,
-    ]),
-    BaseElement::new([
-        0x93d743c668a5c019,
-        0xcdc88409d5286253,
-        0x4d41ab0490ae2da6,
-        0x06ecaf953edbd483,
-    ]),
-    BaseElement::new([
-        0xdabcc56eedef38d9,
-        0xf9dfc550f698b7da,
-        0x32ff4236dc245d7c,
-        0x015deada1cf3a196,
-    ]),
-    BaseElement::new([
-        0x8eb415472ec1d14f,
-        0xfe87c2173a9e638c,
-        0x3c9bd04b1f9e319a,
-        0x00b7f57db4548a3c,
-    ]),
-    BaseElement::new([
-        0x02b7e1837aa935c2,
-        0x39cff48df9a08245,
-        0x43234279738f4341,
-        0x06fd7012efdbffcc,
-    ]),
-    BaseElement::new([
-        0x425ed097b425ed0b,
-        0x5ed097b425ed097b,
-        0xd097b425ed097b42,
-        0x004bda12f684bda1,
-    ]),
-    BaseElement::new([
-        0x0b96a673e28086d9,
-        0xb3183afef24df577,
-        0x8a021b641511e8d2,
-        0x041d7f7926fabb8e,
-    ]),
-    BaseElement::new([
-        0xb69b3722102754a2,
-        0xe7113506ac1242b8,
-        0xeb47fd30cfe3e81e,
-        0x03452e00b3cc070c,
-    ]),
-    BaseElement::new([
-        0xfb6f51d25932377c,
-        0x0705f8463bb2be54,
-        0xba1e33452e00b3cc,
-        0x005178732eb47fd3,
-    ]),
+    BaseElement::new(0x34f07231b5a8683a),
+    BaseElement::new(0x19bf73d0f1e2c40a),
+    BaseElement::new(0x8fa7d660264cf3b),
+    BaseElement::new(0x23a69668583fdb2),
+    BaseElement::new(0x2a9ed0883aa0f75e),
+    BaseElement::new(0x17426695466ac7dc),
+    BaseElement::new(0x2cba12f80822038),
+    BaseElement::new(0x15cd0e2290a952b6),
+    BaseElement::new(0x3dbc6a59513fbfb7),
+    BaseElement::new(0x1681a1682adf97d2),
+    BaseElement::new(0x4123ac24f80e4fc4),
+    BaseElement::new(0x21a839b73e40db0b),
+    BaseElement::new(0x27bc3bafe79187b8),
+    BaseElement::new(0x375b1f73a454ca9f),
+    BaseElement::new(0x2363f94aab561974),
+    BaseElement::new(0x165d6b9e319b8e33),
+    BaseElement::new(0x1d36357c0c8e5939),
+    BaseElement::new(0xeb17eeb1f3fdb3e),
+    BaseElement::new(0x211f03c0c4a38099),
+    BaseElement::new(0x2396ac9839f34820),
+    BaseElement::new(0x17e643ab9b11504a),
+    BaseElement::new(0xd758111052f431e),
+    BaseElement::new(0x211d4b002479b216),
+    BaseElement::new(0x255fa007707285e6),
+    BaseElement::new(0x3e6ec1a4d11bceea),
+    BaseElement::new(0x85cc10da32a3666),
+    BaseElement::new(0x28371c19d43369f9),
+    BaseElement::new(0x3c5e7c67b032083),
+    BaseElement::new(0x3296728566f89c31),
+    BaseElement::new(0x116910e5330fedcd),
+    BaseElement::new(0x30f27772fa4b5d2e),
+    BaseElement::new(0x19b3244b3929d4b8),
+    BaseElement::new(0x2cf535e0c1dc4763),
+    BaseElement::new(0x390b903d8c2a87ef),
+    BaseElement::new(0x4148f2888025b398),
+    BaseElement::new(0x54cb8618a7a4009),
+    BaseElement::new(0x31e7183713a36015),
+    BaseElement::new(0x3d519ad0ae3a0ad1),
+    BaseElement::new(0x37c4ca681f25f997),
+    BaseElement::new(0x31fbd5e75f8c7bd1),
+    BaseElement::new(0x28941a558279d7),
+    BaseElement::new(0x3922885d43c9270e),
+    BaseElement::new(0x39628276d368f25c),
+    BaseElement::new(0x1a785632ad6ee6c7),
+    BaseElement::new(0x13d3497cd835f1d1),
+    BaseElement::new(0x16ed00fede1c850c),
+    BaseElement::new(0x3a6570019331e39a),
+    BaseElement::new(0x5a5009a478d9887),
+    BaseElement::new(0x3a9673dede5260cc),
+    BaseElement::new(0x370185d7229cb0e2),
+    BaseElement::new(0x1b957dec606dcae3),
+    BaseElement::new(0x2988d1de8ad21771),
+    BaseElement::new(0x3bd23b3369605769),
+    BaseElement::new(0x37cde359f936106),
+    BaseElement::new(0x1e9d3e5a25ce5e07),
+    BaseElement::new(0x38b7cafad3252970),
+    BaseElement::new(0x226efdad3f24b9bc),
+    BaseElement::new(0x1455a0c21c891bbc),
+    BaseElement::new(0x293cbe0258c6a7bd),
+    BaseElement::new(0x3caf1c8e06e97699),
+    BaseElement::new(0x2873191a8457f02b),
+    BaseElement::new(0x1a610b3f70cd07fa),
+    BaseElement::new(0x122ac692e423a7cf),
+    BaseElement::new(0x2859d53ca4cd1d00),
+    BaseElement::new(0x2d79f2f5ebb641a8),
+    BaseElement::new(0x54e67796d909d84),
+    BaseElement::new(0x248728b17f831dc7),
+    BaseElement::new(0x237602737e442065),
+    BaseElement::new(0x3c38c86241894ee0),
+    BaseElement::new(0x3af878e02df4e30f),
+    BaseElement::new(0x4022c31d64e496b1),
+    BaseElement::new(0x327a64516d767e24),
+    BaseElement::new(0x282f61da7a396e97),
+    BaseElement::new(0x14793102a4cfe987),
+    BaseElement::new(0x40d262f6fa66b90),
+    BaseElement::new(0x2b5ba21efae8e744),
+    BaseElement::new(0x3b842da613a9a35),
+    BaseElement::new(0x35bcde5cac274317),
+    BaseElement::new(0x3ebb76b23a4f6c98),
+    BaseElement::new(0x1eca38a8b20cd89c),
+    BaseElement::new(0x33293667ca457562),
+    BaseElement::new(0x954d134a628529c),
+    BaseElement::new(0x3c9b2b52b7a6cf60),
+    BaseElement::new(0x1d3d79e482398664),
+    BaseElement::new(0x382854da23e6148c),
+    BaseElement::new(0x1c91c6edc955967f),
+    BaseElement::new(0x26b418bad26a59e0),
+    BaseElement::new(0x22c14dafe1d73f0f),
+    BaseElement::new(0x15047f44e47afa63),
+    BaseElement::new(0x2edf68d234c9d282),
+    BaseElement::new(0x1032ee310bee80c2),
+    BaseElement::new(0x38d5e8b920ef0181),
+    BaseElement::new(0x13b99946a58b2f03),
+    BaseElement::new(0x1585b8f84d4d535d),
+    BaseElement::new(0x312e96d2a21e023e),
+    BaseElement::new(0x2550e3e41f7d3c7e),
+    BaseElement::new(0x303d5f070d68a144),
+    BaseElement::new(0x30e792cf56840a87),
+    BaseElement::new(0xd10302dabec4f61),
+    BaseElement::new(0x2ac242eb47cb96a9),
+    BaseElement::new(0x40f4cd1d8ce9c263),
+    BaseElement::new(0x37c3ffe359dd5dd4),
+    BaseElement::new(0x396b3d87bebb6615),
+    BaseElement::new(0x1c852c80d0ad943c),
+    BaseElement::new(0x18a92b123fc745ce),
+    BaseElement::new(0x9b3880635f215db),
+    BaseElement::new(0x4134051e9b19b19e),
+    BaseElement::new(0x112e6d947b43f713),
+    BaseElement::new(0xb7cc42683865900),
+    BaseElement::new(0x94345d60c7853f),
+    BaseElement::new(0x3e0fa0739b4e1453),
+    BaseElement::new(0x524971a8a65088a),
+    BaseElement::new(0x37f9b0b81ccc5e9c),
+    BaseElement::new(0x1b884e897bc0f4e1),
+    BaseElement::new(0xb9d660756cd258f),
+    BaseElement::new(0x39cd7a6ef9c816b5),
+    BaseElement::new(0x1ac97c64bfdf3517),
+    BaseElement::new(0x2b019ba24ff156a4),
+    BaseElement::new(0x1c3902d3569fa615),
+    BaseElement::new(0x2ae2f9441240606f),
+    BaseElement::new(0x21b6c426a8b604db),
+    BaseElement::new(0x3c5ba759b8d8be0b),
+    BaseElement::new(0x13a68ea3f1b7bdae),
+    BaseElement::new(0x3a7a4c8fd2e8b6d5),
+    BaseElement::new(0x1606c1bbb1ecc874),
+    BaseElement::new(0x23f203b9c610de2c),
+    BaseElement::new(0x25e7874d07bf8ab6),
+    BaseElement::new(0x37bf452926cf8943),
+    BaseElement::new(0xaa33b2c875cf3b5),
+    BaseElement::new(0x3877d62150461848),
+    BaseElement::new(0x258c74be83d23304),
+    BaseElement::new(0x403ee2b4956cea02),
+    BaseElement::new(0x7c3c8a0e62ebc98),
+    BaseElement::new(0x34fddaa96be37c28),
+    BaseElement::new(0x2feb9f90feb4f4b0),
+    BaseElement::new(0x38b02538b229d87c),
+    BaseElement::new(0x2f9ee964619f293e),
+    BaseElement::new(0x347179e6cfa447d1),
+    BaseElement::new(0x3551f12b0b72e5e8),
+    BaseElement::new(0x8330e3ea0e7662b),
+    BaseElement::new(0x3b3447a23d3ba03f),
+    BaseElement::new(0x17a27f1122a1811),
+    BaseElement::new(0x2daf583d8b75c6c4),
+    BaseElement::new(0x33a3e797102c4918),
+    BaseElement::new(0x273154db679a391a),
+    BaseElement::new(0x264fd7ee8e0a7623),
+    BaseElement::new(0x1baf5a0769ad56ae),
+    BaseElement::new(0x3b5a2b1dda462e3c),
+    BaseElement::new(0x18b0959edf0042c9),
+    BaseElement::new(0x1fadb38c2473d2e6),
+    BaseElement::new(0x17303af9d462d5),
+    BaseElement::new(0x27f971d2ad88e5f),
+    BaseElement::new(0x3eaf1e122f2a1c1),
+    BaseElement::new(0x7939c44904c5b10),
+    BaseElement::new(0x14371977af327749),
+    BaseElement::new(0x336df7845c9ac29e),
+    BaseElement::new(0x98df13786d38e7c),
+    BaseElement::new(0x28fd286961cebb60),
+    BaseElement::new(0x3cde050764645d90),
+    BaseElement::new(0xd74662adf161d1e),
+    BaseElement::new(0x1738d7775638c4d7),
+    BaseElement::new(0x233c2c43069537b9),
+    BaseElement::new(0x3aedbb82dccb1f56),
+    BaseElement::new(0x3e6dd0af5934d66e),
+    BaseElement::new(0x311cb441c0dd6308),
+    BaseElement::new(0x1ab0340a95a700b5),
+    BaseElement::new(0x79c788aad0b929c),
+    BaseElement::new(0x4043796d31b818eb),
+    BaseElement::new(0x39666cf57cfe2c71),
+    BaseElement::new(0x3537e9e5a58c7dda),
+    BaseElement::new(0x174374d7cca8f37f),
+    BaseElement::new(0x45d4ee701129e16),
+    BaseElement::new(0x3a05cb1ac4b1a01d),
+    BaseElement::new(0x1ee719f7c8aa8b15),
+    BaseElement::new(0x3bed858755e9de15),
+    BaseElement::new(0x1adf689b8541aba3),
+    BaseElement::new(0x2cd8871f3a369365),
+    BaseElement::new(0x22a62bcdad70bf8),
+    BaseElement::new(0x14d398760e1b1cd7),
+    BaseElement::new(0x1b6a7211e7395924),
+    BaseElement::new(0x87729e7077f291a),
+    BaseElement::new(0x28cef3e59550d0cc),
+    BaseElement::new(0x3de7127b3df8d7ec),
+    BaseElement::new(0xd81f09142f00271),
+    BaseElement::new(0x1308036f1453ec2a),
+    BaseElement::new(0x403352b46c892d3c),
+    BaseElement::new(0x24636b897d090792),
+    BaseElement::new(0x3cd8ceb0c1c74ba5),
+    BaseElement::new(0xd95413502eca397),
+    BaseElement::new(0x10e6ba8cb9da13f1),
+    BaseElement::new(0x1735cededaf68085),
+    BaseElement::new(0xce32bb493c7e6d7),
+    BaseElement::new(0x2dc996ab9816e8ee),
+    BaseElement::new(0x2e9af50552c76684),
+    BaseElement::new(0x13d38ac927a0ebfa),
+    BaseElement::new(0x17d25fc681655ebe),
 ];
 
 pub const ARK: [[BaseElement; STATE_WIDTH * 2]; HASH_CYCLE_LENGTH] = [
     [
-        BaseElement::new([
-            0x5231b693310ca734,
-            0x2c88e9d112801e64,
-            0xa595640653cca094,
-            0x01476d5a26457bb8,
-        ]),
-        BaseElement::new([
-            0xd64a98401adacefa,
-            0x5eb193ce1233c7e5,
-            0x44e33938fffbdd13,
-            0x004707d35dc8dc63,
-        ]),
-        BaseElement::new([
-            0xa3e63e1f0d5bb084,
-            0xa52322d70dd19ee2,
-            0xa8347d664766b208,
-            0x005e49fdaceff100,
-        ]),
-        BaseElement::new([
-            0xdf4fd40f60f240af,
-            0x7e86f0bd96b4db98,
-            0x3dea1e0deb7ff4e0,
-            0x05d33deb60cbf0eb,
-        ]),
-        BaseElement::new([
-            0x250c859dc56be1ca,
-            0xa0b75af0043bb8ae,
-            0x5f43076fc2680b57,
-            0x057368f5713920b1,
-        ]),
-        BaseElement::new([
-            0xa21320bf7ec23efd,
-            0x09a58ef5c3273d6e,
-            0x2f2b19dffc56aef2,
-            0x0202be22191b689d,
-        ]),
-        BaseElement::new([
-            0x3c6e9c0c3c712bc3,
-            0x9185a33bf84be6aa,
-            0xa30b13a81374597f,
-            0x06e8f70436939913,
-        ]),
-        BaseElement::new([
-            0xdc9850d262d53b4f,
-            0xe13d6a7c2d6b253c,
-            0xff33dc4c1b5a7064,
-            0x03f4a6d50c1fffca,
-        ]),
+        BaseElement::new(0x1f0a24c4ed42b7df),
+        BaseElement::new(0x23966eb7b343720e),
+        BaseElement::new(0x14bbfa44ff5b743f),
+        BaseElement::new(0xe664c9986cb8a9e),
+        BaseElement::new(0x4119c0c05c7ecd7e),
+        BaseElement::new(0x32ce8901c4293486),
+        BaseElement::new(0x3e68c5c98d4b4cb8),
+        BaseElement::new(0x2a63cb703b3572a0),
+        BaseElement::new(0x370da12ca562d56d),
+        BaseElement::new(0x1da6d3d90c15b05d),
+        BaseElement::new(0x2eaf791c2a38d572),
+        BaseElement::new(0x2bb3461b78a1f224),
+        BaseElement::new(0x397fea4351111fe6),
+        BaseElement::new(0x1fe11370e8a410d8),
+        BaseElement::new(0x287cc57b73b216c4),
+        BaseElement::new(0x31d43141acff6960),
+        BaseElement::new(0x24a060674a8713ea),
+        BaseElement::new(0x41181e510c8dbc78),
+        BaseElement::new(0x28eea3b98c6b9ee7),
+        BaseElement::new(0x3ce13e44655b3186),
+        BaseElement::new(0xd825b0db466b46d),
+        BaseElement::new(0x4d55c6b88df6972),
+        BaseElement::new(0x11847585b3e06d1e),
+        BaseElement::new(0x2686f84c862f4896),
+        BaseElement::new(0x3faec01f47b5a468),
+        BaseElement::new(0x32010b89ce5a5c16),
+        BaseElement::new(0x3a8a353735812e88),
+        BaseElement::new(0x19acb2c8c419d69),
     ],
     [
-        BaseElement::new([
-            0x27327752745e5dc7,
-            0x5dfade217d48ad88,
-            0x1393b47606f63413,
-            0x00a65d39a5dba898,
-        ]),
-        BaseElement::new([
-            0x2b8587339e88ed48,
-            0xdb5d5ee3139c3625,
-            0x4cb9ca6fc0d8926b,
-            0x000b797b2aab807c,
-        ]),
-        BaseElement::new([
-            0x81ccc8247d2f4a35,
-            0x6271a19e34e76047,
-            0xb6392c725fb4b906,
-            0x049018bc062dfedc,
-        ]),
-        BaseElement::new([
-            0xcc78063433caaa12,
-            0xb991af1df2a062aa,
-            0x23996d80602a629a,
-            0x01ae78f27d3f90d4,
-        ]),
-        BaseElement::new([
-            0xa9cf68e4cf72f452,
-            0x3b37339240cd023e,
-            0xfb95ae6ed9d0bcd8,
-            0x05156bebf81ab533,
-        ]),
-        BaseElement::new([
-            0xb4a571557e4d6a38,
-            0xec5de377d15c49ec,
-            0x47818b7bb3ead455,
-            0x036ebb44fb57e172,
-        ]),
-        BaseElement::new([
-            0x617a97b968e86906,
-            0x24f3380be2050782,
-            0xbf39ad2f9884d8cd,
-            0x02415bd0f434f507,
-        ]),
-        BaseElement::new([
-            0x0490a2bbf1739869,
-            0x38e9c79bd7c20360,
-            0xd41d99b0823a9eac,
-            0x00c14b9a642c565e,
-        ]),
+        BaseElement::new(0x2a67f2def9434b18),
+        BaseElement::new(0x5938a7b8a911856),
+        BaseElement::new(0x345ae70ea4fdf960),
+        BaseElement::new(0x383b69f66d65b559),
+        BaseElement::new(0x1eea20fb14fcc9cf),
+        BaseElement::new(0x40d6bd565c2cf37),
+        BaseElement::new(0x368944bc3e1ae57d),
+        BaseElement::new(0x3449b6bb664d184a),
+        BaseElement::new(0x416c90ce460c7258),
+        BaseElement::new(0x1e270c06d813795d),
+        BaseElement::new(0xf9e18710b4874f2),
+        BaseElement::new(0x2c13bdf5b184c1b2),
+        BaseElement::new(0xce723b3c4e32ff6),
+        BaseElement::new(0x3b4f9580c0a03588),
+        BaseElement::new(0x309fa4dadff08e09),
+        BaseElement::new(0xdb312001f5d8e61),
+        BaseElement::new(0x3553e9ffa77bc9ee),
+        BaseElement::new(0x177ddfc84dcab572),
+        BaseElement::new(0x3a2e9ce68b1a5115),
+        BaseElement::new(0x7858b9979f77e46),
+        BaseElement::new(0x29f254b2d69334fc),
+        BaseElement::new(0x2104a7ca8fb2d70f),
+        BaseElement::new(0x394054b0791650e9),
+        BaseElement::new(0x246e4e5b18f07e54),
+        BaseElement::new(0x6fedf25cfedde0c),
+        BaseElement::new(0x31c2caf0082ccb62),
+        BaseElement::new(0x236548e19637b41a),
+        BaseElement::new(0x29f6a61610faf9c1),
     ],
     [
-        BaseElement::new([
-            0x37b4265f6f36f64d,
-            0x5db64fa6ed54ceaa,
-            0x54969a9cc6412668,
-            0x034dfeda2f594482,
-        ]),
-        BaseElement::new([
-            0xbc1041cb64f57df6,
-            0x055d3fc4d393a979,
-            0x27925b7c79a4fafd,
-            0x069917b84dd12175,
-        ]),
-        BaseElement::new([
-            0xbe43833c6289e7ac,
-            0x857a1ea66f5fc6a7,
-            0x55930222e38ea38a,
-            0x02e5a78d010ca852,
-        ]),
-        BaseElement::new([
-            0xc87338143246fe05,
-            0xbf69074675f62e87,
-            0x9272f7f29d024b38,
-            0x030fb788000cb454,
-        ]),
-        BaseElement::new([
-            0xb410910340011cd0,
-            0xcb04f8ee31dce4da,
-            0xe5c30babcc0af9c9,
-            0x06702e8a1b5c2153,
-        ]),
-        BaseElement::new([
-            0x09bf300f96d66bb1,
-            0x7349f90c66310e6b,
-            0x59c66e9c44f6ed40,
-            0x076e7fa89c71ca07,
-        ]),
-        BaseElement::new([
-            0xd5a414ade5342eef,
-            0xdb14a7ad4531aca8,
-            0x0177b2b580ed2882,
-            0x0784c2928e52d3e6,
-        ]),
-        BaseElement::new([
-            0x69d6f0a7c67ec384,
-            0x59d20da103d81875,
-            0x23ec7e6c63f3d36f,
-            0x0222a8ed43c90e13,
-        ]),
+        BaseElement::new(0x819707ec9a67813),
+        BaseElement::new(0x20c2f6a293cc0a87),
+        BaseElement::new(0x1d3709b68192a421),
+        BaseElement::new(0x645fe7901df574e),
+        BaseElement::new(0x21f889c67d7e3ba3),
+        BaseElement::new(0x2c460161b3914236),
+        BaseElement::new(0x1bac0ef8e49616b0),
+        BaseElement::new(0x70aff1238d34e11),
+        BaseElement::new(0x38c168bc2f68832b),
+        BaseElement::new(0x412a168e21bf2b53),
+        BaseElement::new(0x287ba21a54154ce6),
+        BaseElement::new(0x21ff3f2653cdd1eb),
+        BaseElement::new(0x2f173cca8668ff8f),
+        BaseElement::new(0x3a8696d71835f516),
+        BaseElement::new(0x6d60271f19bdec5),
+        BaseElement::new(0xb3f07f7039df8bf),
+        BaseElement::new(0x345c46a0cc5fb5ed),
+        BaseElement::new(0x1f284a385da803d2),
+        BaseElement::new(0x31272f6ad3863843),
+        BaseElement::new(0x1ce856afd3537362),
+        BaseElement::new(0x1b008de8c1c3ca3a),
+        BaseElement::new(0x3acbde69cfc423a3),
+        BaseElement::new(0x1fb8d8f1e44dfd37),
+        BaseElement::new(0x25bcbadef12e3474),
+        BaseElement::new(0x3ce171702963c13d),
+        BaseElement::new(0x276fd7aed3f312a2),
+        BaseElement::new(0x40a4e27e824c2d),
+        BaseElement::new(0x3e9c674a8002ca62),
     ],
     [
-        BaseElement::new([
-            0xe2d92053a6564f52,
-            0x1db4450581d7b6b2,
-            0xdd800d88337641c6,
-            0x01eaf08c6b55d381,
-        ]),
-        BaseElement::new([
-            0xcfa9625edeb53410,
-            0x9d921bd95d145f2e,
-            0x46a07b0cba952f01,
-            0x05c6211843e0d8a3,
-        ]),
-        BaseElement::new([
-            0xf0e5d659b34f12ac,
-            0x114212ce9bfd0b5b,
-            0xa5dc7a5648124b51,
-            0x0413607c6987c4af,
-        ]),
-        BaseElement::new([
-            0x7e39f221abd52fdb,
-            0x4df20085e4f34aed,
-            0xa0692da2d3c3349f,
-            0x029d1946fa184fed,
-        ]),
-        BaseElement::new([
-            0xae7e2f2ead2471c8,
-            0x0bfe50e87b9e68b7,
-            0x474cd52d2cfbe074,
-            0x07c641311a19adb9,
-        ]),
-        BaseElement::new([
-            0x07fbb674b6c9225f,
-            0xb69d96da7eeb4e98,
-            0xc8691a2653fba5f7,
-            0x06942c5b00dd7ef2,
-        ]),
-        BaseElement::new([
-            0x3fd82b4064f3e992,
-            0xe30977444e12c32c,
-            0x9f93f4ab26e2c333,
-            0x04b1fabb34e315c7,
-        ]),
-        BaseElement::new([
-            0xfe012be1dab30046,
-            0x1cbb32213b139c9f,
-            0x28c15338f03164ff,
-            0x03e91f9270f20712,
-        ]),
+        BaseElement::new(0x1239d2a50c98ee11),
+        BaseElement::new(0x128aa086b005e82c),
+        BaseElement::new(0x2a7e981d4efe8b00),
+        BaseElement::new(0xaaec7ccfe7f2324),
+        BaseElement::new(0x15e97e0d0e1b7358),
+        BaseElement::new(0x447697cb53e2335),
+        BaseElement::new(0x353490eeef4f707c),
+        BaseElement::new(0xa844d78c57c82ae),
+        BaseElement::new(0x37209c0bb193f4a),
+        BaseElement::new(0x39ed12078e2206da),
+        BaseElement::new(0x3f1f3091852b09cc),
+        BaseElement::new(0x208c0a8b88fc9e3e),
+        BaseElement::new(0x1444d6073161e6e3),
+        BaseElement::new(0x1393abe3ac44a731),
+        BaseElement::new(0x954901d34f08c2f),
+        BaseElement::new(0x434d68beff8bc3c),
+        BaseElement::new(0x289b878613113d7b),
+        BaseElement::new(0x11571f4113f74aea),
+        BaseElement::new(0x295d7a74aecbd738),
+        BaseElement::new(0x3fc9cb8bc9e5ce6b),
+        BaseElement::new(0xdbd33109a6a49f7),
+        BaseElement::new(0x1322f7c31be4be9f),
+        BaseElement::new(0x1ce0bb10c065e5d3),
+        BaseElement::new(0xb952ab8628cb682),
+        BaseElement::new(0x40f814133438cbdf),
+        BaseElement::new(0x25722ec1766cd448),
+        BaseElement::new(0x5d49fd46561472d),
+        BaseElement::new(0x991bb35cb7052ca),
     ],
     [
-        BaseElement::new([
-            0x0a1cf87035f4be4e,
-            0x9b9c181d4e34b298,
-            0xc4ca9ea71da77840,
-            0x002aba71c3344681,
-        ]),
-        BaseElement::new([
-            0xe4cb276f196ca2b2,
-            0xe5df5d1925aa3250,
-            0xbeba642d4c8f3e2a,
-            0x00a436597fe2de92,
-        ]),
-        BaseElement::new([
-            0x713db9478548f456,
-            0xda879ec95475a743,
-            0xb5e6b458c170575c,
-            0x051fc01e694f3437,
-        ]),
-        BaseElement::new([
-            0x82545c5f20832a13,
-            0x867639ea078401fc,
-            0x45d11693cb5a41a3,
-            0x014f7d0f806a56e0,
-        ]),
-        BaseElement::new([
-            0x84f26b7e0824f3aa,
-            0x080a7f306b0abcde,
-            0x236a7f592b93ed6c,
-            0x01dde26fb4e1ea79,
-        ]),
-        BaseElement::new([
-            0x50b77cb5972fd5d1,
-            0x77babfe534d33773,
-            0x973f391f34a9558b,
-            0x031ab6aac2dcd105,
-        ]),
-        BaseElement::new([
-            0xb9af0f83cdb4d3ae,
-            0x28c298745be65f18,
-            0x65ddb3413f3b1557,
-            0x04c59f9909843cb8,
-        ]),
-        BaseElement::new([
-            0xd2565f313672ceee,
-            0x3f501236d472d6fc,
-            0x75ae49174c157022,
-            0x01aea710a140e9f4,
-        ]),
+        BaseElement::new(0x2823a1b0d2646a2c),
+        BaseElement::new(0x3a0dc712d799b107),
+        BaseElement::new(0x8c6e77050f662e4),
+        BaseElement::new(0x2fbcf9c0fe368312),
+        BaseElement::new(0x399d5795595c979b),
+        BaseElement::new(0x3ddbaac6e5cab794),
+        BaseElement::new(0x3e3abc3c104634a5),
+        BaseElement::new(0x58218618c424b24),
+        BaseElement::new(0x28d45bdc3c867372),
+        BaseElement::new(0x1f04d7b485f02826),
+        BaseElement::new(0x12b38b2b8757364d),
+        BaseElement::new(0x8faf4eef692d005),
+        BaseElement::new(0x1d9175f53e6c64a1),
+        BaseElement::new(0x30cd988a0ce61ca3),
+        BaseElement::new(0x1dd0bdfacfc9ff80),
+        BaseElement::new(0x22245428977637c7),
+        BaseElement::new(0x1ce88dba021e6543),
+        BaseElement::new(0x40293474d9e4eb72),
+        BaseElement::new(0xf6618f49fa7a229),
+        BaseElement::new(0x12dad1e5ae9d67),
+        BaseElement::new(0x36923eef059e5918),
+        BaseElement::new(0xa5f8accc1bd2c6e),
+        BaseElement::new(0xf7cb307d0f31bd5),
+        BaseElement::new(0x26522ba1cc28828c),
+        BaseElement::new(0x1090b6e701b628b6),
+        BaseElement::new(0x3a97813f9a5a82eb),
+        BaseElement::new(0x8fe5b3cb78acf),
+        BaseElement::new(0x17d261078e8b32c3),
     ],
     [
-        BaseElement::new([
-            0x480f306960b5c4fd,
-            0x01633f73f8135452,
-            0x4119bffcea9b352d,
-            0x07c9e9b9b25839c5,
-        ]),
-        BaseElement::new([
-            0x9f8c3ce88fcc4a54,
-            0x69b1089ab786ea79,
-            0xf54f80ff1d674152,
-            0x0670f4d4b39bb303,
-        ]),
-        BaseElement::new([
-            0x47eadd0e041aab34,
-            0xfda789043d0ebba6,
-            0x738053b034f34e31,
-            0x0355f1dc68b387e6,
-        ]),
-        BaseElement::new([
-            0x5fa5fe5858573156,
-            0x62d0ffe0a7163213,
-            0x1aef5efbaef47cbd,
-            0x002ef429d182a147,
-        ]),
-        BaseElement::new([
-            0x515cd69881974653,
-            0xb52161e67972c512,
-            0x0fb5b5717d7d7633,
-            0x00f5d71406ddc9de,
-        ]),
-        BaseElement::new([
-            0x0e8319885868893b,
-            0x08bd481bc7bf2e75,
-            0x04205ac3aa70c1a6,
-            0x062e591b62fdb99f,
-        ]),
-        BaseElement::new([
-            0xe63d8d7e86222289,
-            0x4fc016957fdd6bc3,
-            0x4e5cdf89510e26d8,
-            0x0227a6861342bb9b,
-        ]),
-        BaseElement::new([
-            0x74ea4b5c36276922,
-            0xf9ef2aac5b5c031c,
-            0x146a6a0822c5c026,
-            0x067a287e24aa2ab1,
-        ]),
+        BaseElement::new(0x1e4acd6ff3382eef),
+        BaseElement::new(0x3d17ca86a7651d49),
+        BaseElement::new(0x2d804138338b7f72),
+        BaseElement::new(0x152788e7fc018214),
+        BaseElement::new(0x22bbf35179db337),
+        BaseElement::new(0xeaae2acc8190a60),
+        BaseElement::new(0x20196ecc727e035b),
+        BaseElement::new(0x2698f7a3485ea605),
+        BaseElement::new(0x19c8deaacaf65443),
+        BaseElement::new(0xde9eb1d8981506a),
+        BaseElement::new(0x3935397a2890ca7a),
+        BaseElement::new(0xedf58cc48004974),
+        BaseElement::new(0x136d5c0e55f1170b),
+        BaseElement::new(0x2b2aa453d1bdb322),
+        BaseElement::new(0x219c52e273d5a977),
+        BaseElement::new(0x16dfe0dc6eb7456f),
+        BaseElement::new(0x188f3d51ce9efd25),
+        BaseElement::new(0x4605ce20f8e3da4),
+        BaseElement::new(0x380547e70a777777),
+        BaseElement::new(0x2b5c71584d414c99),
+        BaseElement::new(0x37507fe409d8339d),
+        BaseElement::new(0x2d40ddcb229e22ac),
+        BaseElement::new(0x11ca5ec22bea5bf4),
+        BaseElement::new(0xd7af7899ff5344b),
+        BaseElement::new(0xb5a2470994c53da),
+        BaseElement::new(0xa3c737f8f73b866),
+        BaseElement::new(0x67bb69f329faed4),
+        BaseElement::new(0xbace861a72434a),
     ],
     [
-        BaseElement::new([
-            0x7f3c952cb4217491,
-            0xd0e1c2bc176658b0,
-            0x1df2e8b11739e5e3,
-            0x007b3fadf31424ba,
-        ]),
-        BaseElement::new([
-            0xc583eb7518303a17,
-            0x6610436fd3668ccc,
-            0x7c5e1ee42165be0c,
-            0x0701fd3e191feb5f,
-        ]),
-        BaseElement::new([
-            0x75a0653604725505,
-            0x294056398f2b3d77,
-            0x78c0db28fafd6c38,
-            0x0635bc275412546e,
-        ]),
-        BaseElement::new([
-            0x87128d33f4ccf569,
-            0x9bbc2ad2843163fd,
-            0xd0083a67f1350bda,
-            0x074517132055d54b,
-        ]),
-        BaseElement::new([
-            0xf7e3b80d141d4c16,
-            0xb1b85eba5c43c4e0,
-            0x2da7aefc5008fdda,
-            0x04e48bb9eb616cd5,
-        ]),
-        BaseElement::new([
-            0x8da473a264407739,
-            0x2142f0320c3203bd,
-            0x154a5528f18bf1b5,
-            0x006accf110232575,
-        ]),
-        BaseElement::new([
-            0xc4b20856571278f2,
-            0x6b684a1606c7b561,
-            0x969e79073dd82255,
-            0x060e7d9d87cd0807,
-        ]),
-        BaseElement::new([
-            0x387c740b4021a165,
-            0x109df0fc299b52fe,
-            0xc6a685e2ff6c41f1,
-            0x0539a768cddbb267,
-        ]),
+        BaseElement::new(0x3f000ab3f6cd3732),
+        BaseElement::new(0xa30620299cb250),
+        BaseElement::new(0xfe651ea8b4878a7),
+        BaseElement::new(0x2c65270c6cc5551d),
+        BaseElement::new(0x40a7e4c790eefa0c),
+        BaseElement::new(0x1ed6c721331db81b),
+        BaseElement::new(0x268cc27cc0f0dc74),
+        BaseElement::new(0x34684cc51ff6b99f),
+        BaseElement::new(0x24ded79a44672f43),
+        BaseElement::new(0x1cdccb24cf696ed5),
+        BaseElement::new(0x11ea5613d92dade1),
+        BaseElement::new(0x1ab67d02d67b0c37),
+        BaseElement::new(0xe09d70f3d80af1c),
+        BaseElement::new(0x333b98b0e36e8bd8),
+        BaseElement::new(0x3b4a7dec3394c686),
+        BaseElement::new(0x19378054e5a32c32),
+        BaseElement::new(0x40bc3d05a339f10),
+        BaseElement::new(0x1f1d63e484ef0021),
+        BaseElement::new(0x15ce5213567419f),
+        BaseElement::new(0x1b08d33c33000502),
+        BaseElement::new(0x3d6176e2dbb0bb17),
+        BaseElement::new(0x1cdde9da8a6083c),
+        BaseElement::new(0x2f552238068a6303),
+        BaseElement::new(0x16794069461cc8dc),
+        BaseElement::new(0x3ac5564dcac156b3),
+        BaseElement::new(0x124db611cbae1828),
+        BaseElement::new(0x128ca6911c1f9f69),
+        BaseElement::new(0xba762a29f69c886),
     ],
-    [
-        BaseElement::new([
-            0x6cc51c5f632b9b13,
-            0x0927ceac9a7c3739,
-            0xc63780633be680a0,
-            0x038ef96e35cf9fb7,
-        ]),
-        BaseElement::new([
-            0xdd14b91335729c70,
-            0xd88c6c37a6c3b967,
-            0x8c484dd54e368672,
-            0x02ecf120ea6f81d4,
-        ]),
-        BaseElement::new([
-            0x7031df0aaefdefd7,
-            0xe917ee989afbbf12,
-            0x8f9025840688eee2,
-            0x046cd5d38d0a8396,
-        ]),
-        BaseElement::new([
-            0xcb5b0d28248927d8,
-            0x3186c58de7a52e36,
-            0x4bb5cbc8e6627a4e,
-            0x0486e37d680ef7fa,
-        ]),
-        BaseElement::new([
-            0x4685cba0b7bc78e5,
-            0xe66b058660f83de8,
-            0x68c8b03590edafd7,
-            0x05ac126cf3d30129,
-        ]),
-        BaseElement::new([
-            0x24a33f503000c7d3,
-            0xe13500a24f39a0e7,
-            0x32424c0f9329a1ba,
-            0x014652de1ef95ea9,
-        ]),
-        BaseElement::new([
-            0xe9fcddfea730cf20,
-            0xd7de724210b43c36,
-            0x1fa2e74f2115b1a8,
-            0x012c40228256de2f,
-        ]),
-        BaseElement::new([
-            0x6ddaad428360ba47,
-            0xef91829e62b34160,
-            0xfd80356fa348d04f,
-            0x0758dbd783add272,
-        ]),
-    ],
-    [
-        BaseElement::new([
-            0x0369c764cd92d97f,
-            0x12684019a3bc7f95,
-            0x520fe79ab3eacd20,
-            0x010c7152113606df,
-        ]),
-        BaseElement::new([
-            0x892e02c1df426979,
-            0x18c9d4caeb9d7bfa,
-            0x0d952ce69fa0f72f,
-            0x00306c074cee9d3c,
-        ]),
-        BaseElement::new([
-            0xc3e14a325b421940,
-            0xff3622c975408eb2,
-            0xd8bc470db54445cf,
-            0x07ed19e7f62ffd07,
-        ]),
-        BaseElement::new([
-            0x115370598cf9f095,
-            0x1844e441a7405bab,
-            0xb7a0a0bf297a7389,
-            0x000cf1dd0dab0ca3,
-        ]),
-        BaseElement::new([
-            0x7fc39996fb689289,
-            0x3cd8a0494b255af0,
-            0x181eeaeeec71f3e4,
-            0x04523fa5a806ba72,
-        ]),
-        BaseElement::new([
-            0xce7b664a52067ef1,
-            0xb5fa1f60a0c6aef6,
-            0x2f23e5490185ca41,
-            0x07925670a375fca5,
-        ]),
-        BaseElement::new([
-            0x5fdb3a02d4f2a3f9,
-            0xd3f3a58662c07e4e,
-            0x15b966cee41c5257,
-            0x04b3f88ed79b1666,
-        ]),
-        BaseElement::new([
-            0x889b2a258e897d96,
-            0x07df5c75cd71ad41,
-            0xe3c1ed5a62ffca1a,
-            0x023c4ceccdcb77d8,
-        ]),
-    ],
-    [
-        BaseElement::new([
-            0x724dec4a7955566c,
-            0x3ccdbca65d9e4dae,
-            0x3f2d2ccf42424d81,
-            0x02bf719dd2bebecb,
-        ]),
-        BaseElement::new([
-            0x94acb5a6de52a22b,
-            0x37213c8156208b59,
-            0x4e143deaeb4c8c3d,
-            0x013829f9cf45893d,
-        ]),
-        BaseElement::new([
-            0x1680ca069d6c3acd,
-            0x1dba87d8d638de26,
-            0x8ba819efbe18c503,
-            0x0799a41302507647,
-        ]),
-        BaseElement::new([
-            0x9b6c3647c96f6f02,
-            0x283eea3c0e4117b4,
-            0x397a9a2ca167ecd0,
-            0x0210166cdd2d6c03,
-        ]),
-        BaseElement::new([
-            0xf38588d1082135bb,
-            0x05bebf117c1ea321,
-            0x96c36c63ef3c774c,
-            0x03fa910715f489ae,
-        ]),
-        BaseElement::new([
-            0x23c91a4123537e25,
-            0x24e927ec2ceec76e,
-            0xf5a405e062f438ef,
-            0x032585fb16ffa31b,
-        ]),
-        BaseElement::new([
-            0xb618a3f07a036fe9,
-            0xf3041499bc40c228,
-            0x55caeca9cb4cf491,
-            0x0129eeb480b893bb,
-        ]),
-        BaseElement::new([
-            0x3c00c89a0b5ce050,
-            0x2345be301ad1de71,
-            0x63cc1a310cdef0a4,
-            0x079e377d84267734,
-        ]),
-    ],
-    [
-        BaseElement::new([
-            0xc46ba60205a9b616,
-            0x82b4644bdfe2049e,
-            0xdb073e408d6a074d,
-            0x0366b4d09da69420,
-        ]),
-        BaseElement::new([
-            0x1b20673e5f94d389,
-            0x58836e88f8756c20,
-            0x868c4a451f7fb367,
-            0x03087c44ef43d657,
-        ]),
-        BaseElement::new([
-            0x856c7bbf1ef918f5,
-            0xe7357d01500efb19,
-            0xdf15058a69b8533a,
-            0x031933bafc6caa01,
-        ]),
-        BaseElement::new([
-            0xca0bc007ba5090de,
-            0x768b50958fcb340f,
-            0xc185f692a2565a39,
-            0x012d5d44b3fdd9e4,
-        ]),
-        BaseElement::new([
-            0x862c477eb4ef477f,
-            0xbd0164de0d9cfa63,
-            0x86ac469d8325002c,
-            0x00ce7a9de5d6d548,
-        ]),
-        BaseElement::new([
-            0x6312f815949380a9,
-            0x38964c1d58ba982a,
-            0x568ab2322ec0b554,
-            0x0250f3be14075977,
-        ]),
-        BaseElement::new([
-            0x9a3c9fc88e038d30,
-            0xa172ee10056edb11,
-            0xa2c66777f786441c,
-            0x04694f04f3059e85,
-        ]),
-        BaseElement::new([
-            0x31823fcea8cfdf7e,
-            0x67a3d4f0ec086a6e,
-            0xbf825593f3acfba4,
-            0x04962923899e997c,
-        ]),
-    ],
-    [
-        BaseElement::new([
-            0x43410e74af23c6bc,
-            0x591e07cb92d46e37,
-            0xe223d82264bf9122,
-            0x02d14ee6b0b3babe,
-        ]),
-        BaseElement::new([
-            0xfa55db2399d6cd8e,
-            0xc324d5f9b2c7b37f,
-            0x0b39b18b0bdce56b,
-            0x01b735dd2387699c,
-        ]),
-        BaseElement::new([
-            0x4b4dc197f85e4568,
-            0xa13d1b1d7f1eba31,
-            0x5fd56951c39e2f8e,
-            0x077920655281828f,
-        ]),
-        BaseElement::new([
-            0xcab1ff5c5c653060,
-            0xe1bb073582d70c8d,
-            0x47fa526ecb6192cb,
-            0x012edc896922ab32,
-        ]),
-        BaseElement::new([
-            0x125bfce53d0dc1af,
-            0x8af16d66d1e1e0aa,
-            0x200e6c4efa34636c,
-            0x065445d63f859765,
-        ]),
-        BaseElement::new([
-            0xea476c4e72aaf7f8,
-            0xf72405e4b43be7a7,
-            0x1e5ec7a19789c540,
-            0x048d756370878a7a,
-        ]),
-        BaseElement::new([
-            0xf3c084c60819e64f,
-            0xa827d9d0a5ec528e,
-            0x5d72b3985c41b9ce,
-            0x036630b55b535917,
-        ]),
-        BaseElement::new([
-            0x9806c64b5c2a0279,
-            0x083596f6ab78b4f3,
-            0x642a0c46816bf28a,
-            0x0173cf4fb3e1e449,
-        ]),
-    ],
-    [
-        BaseElement::new([
-            0xd8eba27511733ebf,
-            0xbafdd8c9e1324ff9,
-            0x68b452d0eea28fda,
-            0x056a06a6bce6eb63,
-        ]),
-        BaseElement::new([
-            0xa05279c0b3ba22b4,
-            0xc8d954054dd23f9b,
-            0xf0b0d781049ef55e,
-            0x01f9c570a584be87,
-        ]),
-        BaseElement::new([
-            0xea7cc6c2e225eea3,
-            0x866b045c223958f1,
-            0xbfe8d5a1ab8e7fe6,
-            0x07ff85df9134ba4a,
-        ]),
-        BaseElement::new([
-            0x0a21e57f3bb8c220,
-            0x8ebb98d113de2315,
-            0xef055b8c8a3954bf,
-            0x03fee11db2927d0f,
-        ]),
-        BaseElement::new([
-            0x3bfbf09f84ca85ab,
-            0x949b9eaa320a7aa9,
-            0xeb116d969583b6e3,
-            0x050ffaf4e49bf417,
-        ]),
-        BaseElement::new([
-            0xbaf0abb7bb6ad183,
-            0x3f73d1836d25dee4,
-            0x9031b2bda8d65754,
-            0x05983219d02fe395,
-        ]),
-        BaseElement::new([
-            0x557c5629aafb3d08,
-            0xefdde43201675ffc,
-            0x3ea72bd04019a9cd,
-            0x028900839c299607,
-        ]),
-        BaseElement::new([
-            0xeee102be02487855,
-            0xd02ff2cbf4821d8c,
-            0xa8e957f404840d0a,
-            0x03caf802861e4e23,
-        ]),
-    ],
-    [
-        BaseElement::new([
-            0x6c00985f083d89af,
-            0xaebad07648386063,
-            0xf7ace104c3645b7e,
-            0x04fb02246790f069,
-        ]),
-        BaseElement::new([
-            0x00b1076cd472597c,
-            0x594d3292cd15e686,
-            0x4c0d02543a140264,
-            0x01e3c4c53cee35d4,
-        ]),
-        BaseElement::new([
-            0xe95b6df8bf4d8718,
-            0x3a98e09524047322,
-            0x534af4bb0d085598,
-            0x02b401051a8d48d8,
-        ]),
-        BaseElement::new([
-            0x3dc3a66f45919258,
-            0xbce9cd4dba5324ae,
-            0x2f71add9d70537d1,
-            0x069bcdb9ccf7a8ae,
-        ]),
-        BaseElement::new([
-            0x5d5dba02bb4a0705,
-            0xe5bc8cc5f8625934,
-            0x562d9454b8e6e0c4,
-            0x02c9672e0aa829c3,
-        ]),
-        BaseElement::new([
-            0x51626563c656f72d,
-            0xb09774b042f9c19b,
-            0xef4e43ba9bb88b7f,
-            0x0341c3f54ef9dc96,
-        ]),
-        BaseElement::new([
-            0xa6feb343bc021018,
-            0xeba5bd1172b7e5c5,
-            0x0124a60929c3baef,
-            0x07f1d315d19d9edc,
-        ]),
-        BaseElement::new([
-            0xc89e93bca621f394,
-            0x840f1b61f5455f8c,
-            0x4e9c11783a798734,
-            0x031b030036d78d2f,
-        ]),
-    ],
-    [BaseElement::ZERO; 8],
-    [BaseElement::ZERO; 8],
+    [BaseElement::ZERO; STATE_WIDTH * 2],
 ];

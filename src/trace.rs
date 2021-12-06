@@ -11,7 +11,7 @@ use super::utils::rescue;
 use super::TransactionMetadata;
 use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
 use winterfell::{
-    math::{curve::Scalar, fields::f252::BaseElement},
+    math::{curves::curve_f63::Scalar, fields::f63::BaseElement},
     ExecutionTrace,
 };
 
@@ -19,7 +19,10 @@ use winterfell::{
 use winterfell::iterators::*;
 
 use merkle_const::TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH;
-use schnorr_const::SIG_CYCLE_LENGTH as SCHNORR_LENGTH;
+use schnorr_const::{
+    AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH, PROJECTIVE_POINT_WIDTH,
+    SIG_CYCLE_LENGTH as SCHNORR_LENGTH,
+};
 
 // TRACE GENERATOR
 // ================================================================================================
@@ -28,11 +31,11 @@ use schnorr_const::SIG_CYCLE_LENGTH as SCHNORR_LENGTH;
 // The trace is composed as follows:
 // (note that sigma here refers to sender_balance - delta)
 //
-// | 4 * HASH_STATE + 4 |          5          | number of registers
-// |    merkle::init    | copy_keys_and_sigma | sub-programs
-// |   merkle::update   | copy_keys_and_sigma |
-// |   schnorr::init    | copy_keys_and_sigma |
-// |   schnorr::verif   |  range_proof_sigma  |
+// | 4 * HASH_STATE + 2 + HASH_RATE |      2 * AFF_POINT + 3      | number of registers
+// |          merkle::init          | copy_keys_delta_sigma_nonce | sub-programs
+// |         merkle::update         | copy_keys_delta_sigma_nonce |
+// |         schnorr::init          | copy_keys_delta_sigma_nonce |
+// |         schnorr::verif         | range_proof_delta_and_sigma |
 #[allow(clippy::too_many_arguments)]
 pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
     let initial_roots = &tx_metadata.initial_roots;
@@ -58,17 +61,15 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
             let delta_bytes = deltas[i].to_bytes();
             let delta_bits = delta_bytes.as_bits::<Lsb0>();
 
-            let sigma_bytes = (s_old_values[i][2] - deltas[i]).to_bytes();
+            let sigma_bytes = (s_old_values[i][AFFINE_POINT_WIDTH] - deltas[i]).to_bytes();
             let sigma_bits = sigma_bytes.as_bits::<Lsb0>();
 
-            let message = [
-                s_old_values[i][0],
-                s_old_values[i][1],
-                r_old_values[i][0],
-                r_old_values[i][1],
+            let message = super::build_tx_message(
+                &s_old_values[i][0..AFFINE_POINT_WIDTH],
+                &r_old_values[i][0..AFFINE_POINT_WIDTH],
                 deltas[i],
-                s_old_values[i][3],
-            ];
+                s_old_values[i][AFFINE_POINT_WIDTH + 1],
+            );
 
             let (pkey_point, sig_bytes, sig_hash_bytes) =
                 schnorr::build_sig_info(&message, &signatures[i]);
@@ -113,8 +114,8 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
 
 pub fn init_transaction_state(
     initial_root: rescue::Hash,
-    s_old_value: [BaseElement; 4],
-    r_old_value: [BaseElement; 4],
+    s_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
     state: &mut [BaseElement],
 ) {
@@ -127,15 +128,15 @@ pub fn init_transaction_state(
         &mut state[..merkle_const::TRACE_WIDTH],
     );
 
-    // Copy public keys and sigma = balance_sender - delta
+    // Copy public keys, delta, sigma = balance_sender - delta, and nonce
     let start_copy_index = merkle_const::TRACE_WIDTH;
-    state[start_copy_index] = s_old_value[0];
-    state[start_copy_index + 1] = s_old_value[1];
-    state[start_copy_index + 2] = r_old_value[0];
-    state[start_copy_index + 3] = r_old_value[1];
-    state[start_copy_index + 4] = delta;
-    state[start_copy_index + 5] = s_old_value[2] - delta;
-    state[start_copy_index + 6] = s_old_value[3];
+    state[start_copy_index..start_copy_index + AFFINE_POINT_WIDTH]
+        .copy_from_slice(&s_old_value[0..AFFINE_POINT_WIDTH]);
+    state[start_copy_index + AFFINE_POINT_WIDTH..start_copy_index + AFFINE_POINT_WIDTH * 2]
+        .copy_from_slice(&r_old_value[0..AFFINE_POINT_WIDTH]);
+    state[start_copy_index + AFFINE_POINT_WIDTH * 2] = delta;
+    state[start_copy_index + AFFINE_POINT_WIDTH * 2 + 1] = s_old_value[AFFINE_POINT_WIDTH] - delta;
+    state[start_copy_index + AFFINE_POINT_WIDTH * 2 + 2] = s_old_value[AFFINE_POINT_WIDTH + 1];
 }
 
 // TRANSITION FUNCTION
@@ -150,11 +151,11 @@ pub fn update_transaction_state(
     r_branch: Vec<rescue::Hash>,
     delta_bits: &BitSlice<Lsb0, u8>,
     sigma_bits: &BitSlice<Lsb0, u8>,
-    signature: (BaseElement, Scalar),
+    signature: ([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
     sig_bits: &BitSlice<Lsb0, u8>,
     sig_hash_bits: &BitSlice<Lsb0, u8>,
-    message: [BaseElement; 6],
-    pkey_point: [BaseElement; 3],
+    message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
+    pkey_point: [BaseElement; PROJECTIVE_POINT_WIDTH],
     state: &mut [BaseElement],
 ) {
     let merkle_update_flag = step < MERKLE_UPDATE_LENGTH - 1;
@@ -176,10 +177,13 @@ pub fn update_transaction_state(
         schnorr::init_sig_verification_state(signature, &mut state[..schnorr_const::TRACE_WIDTH]);
         // We set the 4 registers next to the Schnorr signature sub-trace to zero, for computing
         // the range proofs on delta and sigma = sender_balance - delta
-        let start_range_index = schnorr_const::TRACE_WIDTH;
-        range::init_range_verification_state(&mut state[start_range_index..start_range_index + 2]);
+        let start_delta_range_index = schnorr_const::TRACE_WIDTH;
+        let start_sigma_range_index = NONCE_COPY_POS + 1;
         range::init_range_verification_state(
-            &mut state[start_range_index + 2..start_range_index + 4],
+            &mut state[start_delta_range_index..start_delta_range_index + 2],
+        );
+        range::init_range_verification_state(
+            &mut state[start_sigma_range_index..start_sigma_range_index + 2],
         );
     } else if schnorr_update_flag {
         // Proceed to Schnorr signature verification
@@ -195,18 +199,19 @@ pub fn update_transaction_state(
 
         if schnorr_step < range::RANGE_LOG {
             // Compute the range proof on delta and sigma
-            let start_range_index = schnorr_const::TRACE_WIDTH;
+            let start_delta_range_index = schnorr_const::TRACE_WIDTH;
+            let start_sigma_range_index = NONCE_COPY_POS + 1;
             range::update_range_verification_state(
                 schnorr_step,
                 range_const::RANGE_LOG,
                 delta_bits,
-                &mut state[start_range_index..start_range_index + 2],
+                &mut state[start_delta_range_index..start_delta_range_index + 2],
             );
             range::update_range_verification_state(
                 schnorr_step,
                 range_const::RANGE_LOG,
                 sigma_bits,
-                &mut state[start_range_index + 2..start_range_index + 4],
+                &mut state[start_sigma_range_index..start_sigma_range_index + 2],
             );
         } else {
             debug_assert_eq!(

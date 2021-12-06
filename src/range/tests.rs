@@ -4,15 +4,35 @@
 // LICENSE file in the root directory of this source tree.
 
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     FieldExtension, HashFunction, ProofOptions,
 };
 
 #[test]
 fn range_proof_basic_proof_verification() {
     let range = Box::new(super::RangeProofExample::new(
-        build_options(),
+        build_options(1),
         BaseElement::from(17u32),
+    ));
+    let proof = range.prove();
+    assert!(range.verify(proof).is_ok());
+}
+
+#[test]
+fn range_proof_test_basic_proof_verification_quadratic_extension() {
+    let range = Box::new(super::RangeProofExample::new(
+        build_options(2),
+        BaseElement::from(42u32),
+    ));
+    let proof = range.prove();
+    assert!(range.verify(proof).is_ok());
+}
+
+#[test]
+fn range_proof_test_basic_proof_verification_cubic_extension() {
+    let range = Box::new(super::RangeProofExample::new(
+        build_options(3),
+        BaseElement::from(42u32),
     ));
     let proof = range.prove();
     assert!(range.verify(proof).is_ok());
@@ -21,7 +41,7 @@ fn range_proof_basic_proof_verification() {
 #[test]
 fn range_proof_max_input() {
     let range = Box::new(super::RangeProofExample::new(
-        build_options(),
+        build_options(1),
         BaseElement::from(1u128 << 63) - BaseElement::ONE,
     ));
     let proof = range.prove();
@@ -32,8 +52,8 @@ fn range_proof_max_input() {
 #[should_panic]
 fn range_proof_input_too_large() {
     let range = Box::new(super::RangeProofExample::new(
-        build_options(),
-        BaseElement::from(1u128 << 64),
+        build_options(1),
+        BaseElement::from_raw_unchecked(4719772409484279809), // M
     ));
     range.prove();
 }
@@ -43,7 +63,7 @@ fn range_proof_input_too_large() {
 #[should_panic]
 fn range_proof_input_negative() {
     let range = Box::new(super::RangeProofExample::new(
-        build_options(),
+        build_options(1),
         -BaseElement::from(3u32),
     ));
     range.prove();
@@ -52,7 +72,7 @@ fn range_proof_input_negative() {
 #[test]
 fn range_test_basic_proof_verification_fail() {
     let range = Box::new(super::RangeProofExample::new(
-        build_options(),
+        build_options(1),
         BaseElement::ONE,
     ));
     let proof = range.prove();
@@ -60,13 +80,17 @@ fn range_test_basic_proof_verification_fail() {
     assert!(verified.is_err());
 }
 
-fn build_options() -> ProofOptions {
+fn build_options(extension: u8) -> ProofOptions {
     ProofOptions::new(
         42,
-        16,
+        4,
         0,
         HashFunction::Blake3_256,
-        FieldExtension::None,
+        match extension {
+            2 => FieldExtension::Quadratic,
+            3 => FieldExtension::Cubic,
+            _ => FieldExtension::None,
+        },
         4,
         256,
     )

@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use winterfell::math::fields::f252::BaseElement;
+use winterfell::math::fields::f63::BaseElement;
 
 pub fn stitch(
     original_columns: &mut Vec<Vec<BaseElement>>,

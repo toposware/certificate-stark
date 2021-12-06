@@ -4,34 +4,47 @@
 // LICENSE file in the root directory of this source tree.
 
 use super::{are_equal, is_binary, not, EvaluationResult};
-use winterfell::math::{curve::B, fields::f252::BaseElement, FieldElement};
+use winterfell::math::{fields::f63::BaseElement, FieldElement};
 
 // CONSTANTS
 // ================================================================================================
 
-const TWO: BaseElement = BaseElement::new([2, 0, 0, 0]);
-const THREE: BaseElement = BaseElement::new([3, 0, 0, 0]);
-const SIX: BaseElement = BaseElement::new([6, 0, 0, 0]);
-const EIGHT: BaseElement = BaseElement::new([8, 0, 0, 0]);
+/// The length of a point coordinate
+pub const POINT_COORDINATE_WIDTH: usize = 6;
+/// The length of an AffinePoint
+pub const AFFINE_POINT_WIDTH: usize = POINT_COORDINATE_WIDTH * 2;
+/// The length of a ProjectivePoint
+pub const PROJECTIVE_POINT_WIDTH: usize = POINT_COORDINATE_WIDTH * 3;
 
-/// Curve arithmetic operations are done in projective coordinates
-pub const POINT_WIDTH: usize = 3;
-
-/// Specifies the projective coordinates of the curve generator G.
-pub const GENERATOR: [BaseElement; 3] = [
-    BaseElement::from_raw_unchecked([
-        0xc9019623cf0273dd,
-        0x51a9bf65d4403dea,
-        0x0429bf5184041c7b,
-        0x033840300bf6cec1,
-    ]),
-    BaseElement::from_raw_unchecked([
-        0x569d0da34235308a,
-        0x0939e3442869bbe7,
-        0xfbd89a97cf4b33ad,
-        0x05a0e71610f55329,
-    ]),
+/// Specifies the projective coordinates of the curve generator G
+pub const GENERATOR: [BaseElement; PROJECTIVE_POINT_WIDTH] = [
+    BaseElement::from_raw_unchecked(0xf6798582c92ece1),
+    BaseElement::from_raw_unchecked(0x2b7c30a4c7d886c0),
+    BaseElement::from_raw_unchecked(0x1269cdae98dc2fd0),
+    BaseElement::from_raw_unchecked(0x11b78ef6c71c6132),
+    BaseElement::from_raw_unchecked(0x3ac2244dfc47537),
+    BaseElement::from_raw_unchecked(0x36dfeea4b9051daf),
+    BaseElement::from_raw_unchecked(0x334807e450d55e2f),
+    BaseElement::from_raw_unchecked(0x200a54d42b84bd17),
+    BaseElement::from_raw_unchecked(0x271af7bb20ab32e1),
+    BaseElement::from_raw_unchecked(0x3df7b90927efc7ec),
+    BaseElement::from_raw_unchecked(0xab8bbf4a53af6a0),
+    BaseElement::from_raw_unchecked(0xe13dca26b2ac6ab),
     BaseElement::ONE,
+    BaseElement::ZERO,
+    BaseElement::ZERO,
+    BaseElement::ZERO,
+    BaseElement::ZERO,
+    BaseElement::ZERO,
+];
+
+pub const B3: [BaseElement; POINT_COORDINATE_WIDTH] = [
+    BaseElement::new(4580716109223965136),
+    BaseElement::new(2805468717395796313),
+    BaseElement::new(1114868343634801550),
+    BaseElement::new(2558072281956999041),
+    BaseElement::new(1087679150666117746),
+    BaseElement::new(3602598603028951788),
 ];
 
 // TRACE
@@ -44,7 +57,7 @@ pub fn apply_point_doubling(state: &mut [BaseElement]) {
 
 /// Apply a point addition between the current `state` registers with a given point.
 pub fn apply_point_addition(state: &mut [BaseElement], point: &[BaseElement]) {
-    if state[POINT_WIDTH] == BaseElement::ONE {
+    if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
         compute_add(state, point)
     };
 }
@@ -59,21 +72,25 @@ pub fn enforce_point_doubling<E: FieldElement + From<BaseElement>>(
     next: &[E],
     flag: E,
 ) {
-    let mut step1 = [E::ZERO; POINT_WIDTH];
-    step1.copy_from_slice(&current[0..POINT_WIDTH]);
+    let mut step1 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step1.copy_from_slice(&current[0..PROJECTIVE_POINT_WIDTH]);
 
-    let mut step2 = [E::ZERO; POINT_WIDTH];
-    step2.copy_from_slice(&next[0..POINT_WIDTH]);
+    let mut step2 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step2.copy_from_slice(&next[0..PROJECTIVE_POINT_WIDTH]);
 
     compute_double(&mut step1);
 
     // Make sure that the results are equal
-    for i in 0..POINT_WIDTH {
+    for i in 0..PROJECTIVE_POINT_WIDTH {
         result.agg_constraint(i, flag, are_equal(step2[i], step1[i]));
     }
 
     // Enforce that the last register for conditional addition is indeed binary
-    result.agg_constraint(POINT_WIDTH, flag, is_binary(current[POINT_WIDTH]));
+    result.agg_constraint(
+        PROJECTIVE_POINT_WIDTH,
+        flag,
+        is_binary(current[PROJECTIVE_POINT_WIDTH]),
+    );
 }
 
 /// When flag = 1, enforces constraints for performing a point addition
@@ -85,16 +102,16 @@ pub fn enforce_point_addition<E: FieldElement + From<BaseElement>>(
     point: &[E],
     flag: E,
 ) {
-    let mut step1 = [E::ZERO; POINT_WIDTH];
-    step1.copy_from_slice(&current[0..POINT_WIDTH]);
+    let mut step1 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step1.copy_from_slice(&current[0..PROJECTIVE_POINT_WIDTH]);
 
-    let mut step2 = [E::ZERO; POINT_WIDTH];
-    step2.copy_from_slice(&next[0..POINT_WIDTH]);
+    let mut step2 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step2.copy_from_slice(&next[0..PROJECTIVE_POINT_WIDTH]);
 
     compute_add(&mut step1, point);
-    let adding_bit = current[POINT_WIDTH];
+    let adding_bit = current[PROJECTIVE_POINT_WIDTH];
 
-    for i in 0..POINT_WIDTH {
+    for i in 0..PROJECTIVE_POINT_WIDTH {
         result.agg_constraint(
             i,
             flag,
@@ -107,9 +124,12 @@ pub fn enforce_point_addition<E: FieldElement + From<BaseElement>>(
 
     // Ensure proper duplication of the binary decomposition
     result.agg_constraint(
-        POINT_WIDTH,
+        PROJECTIVE_POINT_WIDTH,
         flag,
-        are_equal(current[POINT_WIDTH], next[POINT_WIDTH]),
+        are_equal(
+            current[PROJECTIVE_POINT_WIDTH],
+            next[PROJECTIVE_POINT_WIDTH],
+        ),
     );
 }
 
@@ -126,17 +146,25 @@ pub fn enforce_point_addition_reduce_x<E: FieldElement + From<BaseElement>>(
     point: &[E],
     flag: E,
 ) {
-    let mut step1 = [E::ZERO; POINT_WIDTH];
-    step1.copy_from_slice(&current[0..POINT_WIDTH]);
+    let mut step1 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step1.copy_from_slice(&current[0..PROJECTIVE_POINT_WIDTH]);
 
-    let mut step2 = [E::ZERO; POINT_WIDTH];
-    step2.copy_from_slice(&next[0..POINT_WIDTH]);
+    let mut step2 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step2.copy_from_slice(&next[0..PROJECTIVE_POINT_WIDTH]);
 
     compute_add(&mut step1, point);
 
-    result.agg_constraint(0, flag, are_equal(step2[0] * step1[2], step1[0]));
-    result.agg_constraint(1, flag, are_equal(step2[1], step1[1]));
-    result.agg_constraint(2, flag, are_equal(step2[2], step1[2]));
+    let x_z = mul_fp6(
+        &step2[0..POINT_COORDINATE_WIDTH],
+        &step1[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH],
+    );
+
+    for i in 0..POINT_COORDINATE_WIDTH {
+        result.agg_constraint(i, flag, are_equal(x_z[i], step1[i]));
+    }
+    for i in POINT_COORDINATE_WIDTH..PROJECTIVE_POINT_WIDTH {
+        result.agg_constraint(i, flag, are_equal(step2[i], step1[i]));
+    }
 }
 
 // HELPER FUNCTIONS
@@ -152,32 +180,61 @@ pub fn enforce_point_addition_reduce_x<E: FieldElement + From<BaseElement>>(
 /// `Z2 = 8Y^3.Z`
 #[inline(always)]
 fn compute_double<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
-    let x_squared = state[0] * state[0];
-    let xy = state[0] * state[1];
-    let xz = state[0] * state[2];
+    let self_x = &state[0..POINT_COORDINATE_WIDTH];
+    let self_y = &state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
+    let self_z = &state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH];
 
-    let y_squared = state[1] * state[1];
-    let yz = state[1] * state[2];
+    let b3 = [
+        E::from(B3[0]),
+        E::from(B3[1]),
+        E::from(B3[2]),
+        E::from(B3[3]),
+        E::from(B3[4]),
+        E::from(B3[5]),
+    ];
 
-    let z_squared = state[2] * state[2];
+    let t0 = square_fp6(self_x);
+    let t1 = square_fp6(self_y);
+    let t2 = square_fp6(self_z);
 
-    let b3 = E::from(THREE * B);
-    let two = E::from(TWO);
-    let three = E::from(THREE);
-    let b6 = E::from(SIX * B);
-    let eight = E::from(EIGHT);
+    let t3 = mul_fp6(self_x, self_y);
+    let t3 = double_fp6(&t3);
+    let z3 = mul_fp6(self_x, self_z);
 
-    let x = two * xy * (y_squared - two * xz - b3 * z_squared)
-        - two * yz * (x_squared + b6 * xz - z_squared);
+    let z3 = double_fp6(&z3);
+    let y3 = mul_fp6(&b3, &t2);
 
-    let y = (y_squared + two * xz + b3 * z_squared) * (y_squared - two * xz - b3 * z_squared)
-        + (three * x_squared + z_squared) * (x_squared + b6 * xz - z_squared);
+    let y3 = add_fp6(&z3, &y3);
+    let x3 = sub_fp6(&t1, &y3);
+    let y3 = add_fp6(&t1, &y3);
 
-    let z = eight * y_squared * yz;
+    let y3 = mul_fp6(&x3, &y3);
+    let x3 = mul_fp6(&t3, &x3);
+    let z3 = mul_fp6(&b3, &z3);
 
-    state[0] = x;
-    state[1] = y;
-    state[2] = z;
+    let t3 = sub_fp6(&t0, &t2);
+
+    let t3 = add_fp6(&t3, &z3);
+    let z3 = double_fp6(&t0);
+    let t0 = add_fp6(&z3, &t0);
+
+    let t0 = add_fp6(&t0, &t2);
+    let t0 = mul_fp6(&t0, &t3);
+    let y3 = add_fp6(&y3, &t0);
+
+    let t2 = mul_fp6(self_y, self_z);
+    let t2 = double_fp6(&t2);
+    let t0 = mul_fp6(&t2, &t3);
+
+    let x3 = sub_fp6(&x3, &t0);
+    let z3 = mul_fp6(&t2, &t1);
+    let z3 = double_fp6(&z3);
+
+    let z3 = double_fp6(&z3);
+
+    state[0..POINT_COORDINATE_WIDTH].copy_from_slice(&x3);
+    state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&y3);
+    state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH].copy_from_slice(&z3);
 }
 
 /// Compute the addition of the current point, stored as [X,Y,Z], with a given one.
@@ -193,31 +250,324 @@ fn compute_double<E: FieldElement + From<BaseElement>>(state: &mut [E]) {
 ///         + (X1.Y2 + X2.Y1) (3X1.X2 + Z1.Z2)`
 #[inline(always)]
 fn compute_add<E: FieldElement + From<BaseElement>>(state: &mut [E], point: &[E]) {
-    let x1x2 = state[0] * point[0];
-    let x1y2 = state[0] * point[1];
-    let x1z2 = state[0] * point[2];
+    let self_x = &state[0..POINT_COORDINATE_WIDTH];
+    let self_y = &state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
+    let self_z = &state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH];
 
-    let y1x2 = state[1] * point[0];
-    let y1y2 = state[1] * point[1];
-    let y1z2 = state[1] * point[2];
+    let rhs_x = &point[0..POINT_COORDINATE_WIDTH];
+    let rhs_y = &point[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
+    let rhs_z = &point[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH];
 
-    let z1x2 = state[2] * point[0];
-    let z1y2 = state[2] * point[1];
-    let z1z2 = state[2] * point[2];
+    let b3 = [
+        E::from(B3[0]),
+        E::from(B3[1]),
+        E::from(B3[2]),
+        E::from(B3[3]),
+        E::from(B3[4]),
+        E::from(B3[5]),
+    ];
 
-    let b3 = E::from(THREE * B);
-    let three = E::from(THREE);
+    let t0 = mul_fp6(self_x, rhs_x);
+    let t1 = mul_fp6(self_y, rhs_y);
+    let t2 = mul_fp6(self_z, rhs_z);
 
-    let x = (x1y2 + y1x2) * (y1y2 - (x1z2 + z1x2) - b3 * z1z2)
-        - (y1z2 + z1y2) * (x1x2 + b3 * (x1z2 + z1x2) - z1z2);
+    let t3 = add_fp6(self_x, self_y);
+    let t4 = add_fp6(rhs_x, rhs_y);
+    let t3 = mul_fp6(&t3, &t4);
 
-    let y = (three * x1x2 + z1z2) * (x1x2 + b3 * (x1z2 + z1x2) - z1z2)
-        + (y1y2 + (x1z2 + z1x2) + b3 * z1z2) * (y1y2 - (x1z2 + z1x2) - b3 * z1z2);
+    let t4 = add_fp6(&t0, &t1);
+    let t3 = sub_fp6(&t3, &t4);
+    let t4 = add_fp6(self_x, self_z);
 
-    let z =
-        (y1z2 + z1y2) * (y1y2 + (x1z2 + z1x2) + b3 * z1z2) + (x1y2 + y1x2) * (three * x1x2 + z1z2);
+    let t5 = add_fp6(rhs_x, rhs_z);
+    let t4 = mul_fp6(&t4, &t5);
+    let t5 = add_fp6(&t0, &t2);
 
-    state[0] = x;
-    state[1] = y;
-    state[2] = z;
+    let t4 = sub_fp6(&t4, &t5);
+    let t5 = add_fp6(self_y, self_z);
+    let x3 = add_fp6(rhs_y, rhs_z);
+
+    let t5 = mul_fp6(&t5, &x3);
+    let x3 = add_fp6(&t1, &t2);
+    let t5 = sub_fp6(&t5, &x3);
+
+    let x3 = mul_fp6(&b3, &t2);
+    let z3 = add_fp6(&x3, &t4);
+
+    let x3 = sub_fp6(&t1, &z3);
+    let z3 = add_fp6(&t1, &z3);
+    let y3 = mul_fp6(&x3, &z3);
+
+    let t1 = double_fp6(&t0);
+    let t1 = add_fp6(&t1, &t0);
+
+    let t4 = mul_fp6(&b3, &t4);
+    let t1 = add_fp6(&t1, &t2);
+    let t2 = sub_fp6(&t0, &t2);
+
+    let t4 = add_fp6(&t4, &t2);
+    let t0 = mul_fp6(&t1, &t4);
+
+    let y3 = add_fp6(&y3, &t0);
+    let t0 = mul_fp6(&t5, &t4);
+    let x3 = mul_fp6(&t3, &x3);
+
+    let x3 = sub_fp6(&x3, &t0);
+    let t0 = mul_fp6(&t3, &t1);
+    let z3 = mul_fp6(&t5, &z3);
+
+    let z3 = add_fp6(&z3, &t0);
+
+    state[0..POINT_COORDINATE_WIDTH].copy_from_slice(&x3);
+    state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&y3);
+    state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH].copy_from_slice(&z3);
+}
+
+#[inline(always)]
+pub fn square_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+    let self_c0 = a[0];
+    let self_c1 = a[1];
+
+    let aa = self_c0.square();
+    let bb = self_c1.square();
+
+    let tmp = self_c0.sub(self_c1);
+    let tmp = (&tmp).square();
+
+    let c0 = (&bb).double();
+    let c0 = (&c0).add(aa);
+
+    let c1 = (&bb).add(c0);
+    let c1 = (&c1).sub(tmp);
+
+    [c0, c1]
+}
+
+#[inline(always)]
+pub fn mul_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
+    let self_c0 = a[0];
+    let self_c1 = a[1];
+
+    let other_c0 = b[0];
+    let other_c1 = b[1];
+
+    let aa = (&self_c0).mul(other_c0);
+    let bb = (&self_c1).mul(other_c1);
+
+    let tmp = self_c0.sub(self_c1);
+    let tmp2 = other_c1.sub(other_c0);
+    let tmp = (&tmp).mul(tmp2);
+
+    let c0 = (&bb).double();
+    let c0 = (&c0).add(aa);
+
+    let c1 = (&bb).add(c0);
+    let c1 = (&c1).add(tmp);
+
+    [c0, c1]
+}
+
+#[inline(always)]
+pub fn invert_fp2(a: &[BaseElement]) -> [BaseElement; 2] {
+    let t = (a[0].square() + a[0].double() * a[1] - a[1].square().double()).inv();
+
+    [(a[0] + a[1].double()) * t, -a[1] * t]
+}
+
+#[inline(always)]
+pub fn add_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
+    [a[0].add(b[0]), a[1].add(b[1])]
+}
+
+#[inline(always)]
+pub fn double_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+    [a[0].double(), a[1].double()]
+}
+
+#[inline(always)]
+pub fn sub_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
+    [a[0].sub(b[0]), a[1].sub(b[1])]
+}
+
+#[inline(always)]
+pub fn neg_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+    [a[0].neg(), a[1].neg()]
+}
+
+#[inline(always)]
+pub fn square_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+    let self_c0 = &a[0..2];
+    let self_c1 = &a[2..4];
+    let self_c2 = &a[4..POINT_COORDINATE_WIDTH];
+
+    let aa = square_fp2(self_c0);
+    let bb = square_fp2(self_c1);
+    let cc = square_fp2(self_c2);
+
+    let ab_ab = add_fp2(self_c0, self_c1);
+    let ab_ab = square_fp2(&ab_ab);
+
+    let ac_ac = add_fp2(self_c0, self_c2);
+    let ac_ac = square_fp2(&ac_ac);
+
+    let bc_bc = add_fp2(self_c1, self_c2);
+    let bc_bc = square_fp2(&bc_bc);
+
+    let tmp = add_fp2(&aa, &bb);
+    let tmp = add_fp2(&tmp, &cc);
+
+    let c0 = sub_fp2(&tmp, &bc_bc);
+
+    let c1 = sub_fp2(&ab_ab, &bc_bc);
+    let c1 = sub_fp2(&c1, &aa);
+
+    let c2 = sub_fp2(&ac_ac, &tmp);
+    let c2 = sub_fp2(&c2, &cc);
+    let t2 = add_fp2(&bb, &bb);
+    let c2 = add_fp2(&c2, &t2);
+
+    [c0[0], c0[1], c1[0], c1[1], c2[0], c2[1]]
+}
+
+#[inline(always)]
+pub fn mul_fp6<E: FieldElement + From<BaseElement>>(
+    a: &[E],
+    b: &[E],
+) -> [E; POINT_COORDINATE_WIDTH] {
+    let self_c0 = &a[0..2];
+    let self_c1 = &a[2..4];
+    let self_c2 = &a[4..POINT_COORDINATE_WIDTH];
+
+    let other_c0 = &b[0..2];
+    let other_c1 = &b[2..4];
+    let other_c2 = &b[4..POINT_COORDINATE_WIDTH];
+
+    let aa = mul_fp2(self_c0, other_c0);
+    let bb = mul_fp2(self_c1, other_c1);
+    let cc = mul_fp2(self_c2, other_c2);
+
+    let ab_ab = add_fp2(self_c0, self_c1);
+    let tmp = add_fp2(other_c0, other_c1);
+    let ab_ab = mul_fp2(&ab_ab, &tmp);
+
+    let ac_ac = add_fp2(self_c0, self_c2);
+    let tmp = add_fp2(other_c0, other_c2);
+    let ac_ac = mul_fp2(&ac_ac, &tmp);
+
+    let bc_bc = add_fp2(self_c1, self_c2);
+    let tmp = add_fp2(other_c1, other_c2);
+    let bc_bc = mul_fp2(&bc_bc, &tmp);
+
+    let tmp = add_fp2(&aa, &bb);
+    let tmp = add_fp2(&tmp, &cc);
+
+    let c0 = sub_fp2(&tmp, &bc_bc);
+
+    let c1 = sub_fp2(&ab_ab, &bc_bc);
+    let c1 = sub_fp2(&c1, &aa);
+
+    let c2 = sub_fp2(&ac_ac, &tmp);
+    let c2 = sub_fp2(&c2, &cc);
+    let t2 = add_fp2(&bb, &bb);
+    let c2 = add_fp2(&c2, &t2);
+
+    [c0[0], c0[1], c1[0], c1[1], c2[0], c2[1]]
+}
+
+#[inline(always)]
+pub fn invert_fp6(a: &[BaseElement]) -> [BaseElement; POINT_COORDINATE_WIDTH] {
+    let self_c0 = &a[0..2];
+    let self_c1 = &a[2..4];
+    let self_c2 = &a[4..POINT_COORDINATE_WIDTH];
+
+    let c0_sq = square_fp2(self_c0);
+    let c1_sq = square_fp2(self_c1);
+    let c2_sq = square_fp2(self_c2);
+
+    let t = mul_fp2(self_c0, &add_fp2(&c0_sq, &c1_sq));
+    let t = sub_fp2(&t, &mul_fp2(self_c1, &c1_sq));
+    let tmp = add_fp2(self_c0, &sub_fp2(self_c2, self_c1));
+    let t = add_fp2(&t, &mul_fp2(&tmp, &c2_sq));
+    let tmp = double_fp2(self_c0);
+    let tmp = add_fp2(&tmp, self_c0);
+    let tmp = mul_fp2(&tmp, self_c1);
+    let tmp = sub_fp2(&double_fp2(&c0_sq), &tmp);
+    let tmp = mul_fp2(&tmp, self_c2);
+    let t = sub_fp2(&t, &tmp);
+
+    let t = invert_fp2(&t);
+
+    let c0 = add_fp2(&c0_sq, &c1_sq);
+    let c0 = add_fp2(&c0, &c2_sq);
+    let tmp = sub_fp2(&double_fp2(self_c0), self_c1);
+    let tmp = mul_fp2(&tmp, self_c2);
+    let c0 = sub_fp2(&c0, &tmp);
+    let c0 = mul_fp2(&c0, &t);
+
+    let c1 = mul_fp2(self_c0, self_c1);
+    let c1 = add_fp2(&c1, &c2_sq);
+    let c1 = neg_fp2(&c1);
+    let c1 = mul_fp2(&c1, &t);
+
+    let c2 = mul_fp2(self_c0, self_c2);
+    let c2 = sub_fp2(&c1_sq, &c2);
+    let c2 = add_fp2(&c2, &c2_sq);
+    let c2 = mul_fp2(&c2, &t);
+
+    [c0[0], c0[1], c1[0], c1[1], c2[0], c2[1]]
+}
+
+#[inline(always)]
+pub fn add_fp6<E: FieldElement + From<BaseElement>>(
+    a: &[E],
+    b: &[E],
+) -> [E; POINT_COORDINATE_WIDTH] {
+    [
+        a[0].add(b[0]),
+        a[1].add(b[1]),
+        a[2].add(b[2]),
+        a[3].add(b[3]),
+        a[4].add(b[4]),
+        a[5].add(b[5]),
+    ]
+}
+
+#[inline(always)]
+pub fn double_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+    [
+        a[0].double(),
+        a[1].double(),
+        a[2].double(),
+        a[3].double(),
+        a[4].double(),
+        a[5].double(),
+    ]
+}
+
+#[inline(always)]
+pub fn sub_fp6<E: FieldElement + From<BaseElement>>(
+    a: &[E],
+    b: &[E],
+) -> [E; POINT_COORDINATE_WIDTH] {
+    [
+        a[0].sub(b[0]),
+        a[1].sub(b[1]),
+        a[2].sub(b[2]),
+        a[3].sub(b[3]),
+        a[4].sub(b[4]),
+        a[5].sub(b[5]),
+    ]
+}
+
+#[inline(always)]
+#[allow(unused)]
+pub fn neg_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+    [
+        a[0].neg(),
+        a[1].neg(),
+        a[2].neg(),
+        a[3].neg(),
+        a[4].neg(),
+        a[5].neg(),
+    ]
 }

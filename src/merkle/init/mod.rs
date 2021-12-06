@@ -6,15 +6,16 @@
 use log::debug;
 use std::time::Instant;
 use winterfell::{
-    math::{fields::f252::BaseElement, log2, FieldElement},
+    math::{fields::f63::BaseElement, log2, FieldElement},
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 
-pub mod air;
-pub use air::{evaluate_constraints, periodic_columns};
+mod air;
+pub use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{PreMerkleAir, PublicInputs};
 
 pub mod constants;
+use constants::AFFINE_POINT_WIDTH;
 mod trace;
 pub use trace::{
     build_trace, init_merkle_initialization_state, update_merkle_initialization_state,
@@ -42,16 +43,16 @@ pub fn get_example() -> PreMerkleExample {
 
 pub struct PreMerkleExample {
     options: ProofOptions,
-    s_inputs: [BaseElement; 4],
-    r_inputs: [BaseElement; 4],
+    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
+    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
 }
 
 impl PreMerkleExample {
     pub fn new(options: ProofOptions) -> PreMerkleExample {
         // Sender and receiver inputs are 4 BaseElement s, namely: 2 for the pk, 1 for the $, and 1 for the nonce
-        let s_inputs = [BaseElement::ZERO; 4];
-        let r_inputs = [BaseElement::ZERO; 4];
+        let s_inputs = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
+        let r_inputs = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
         let delta = BaseElement::ONE;
 
         PreMerkleExample {

@@ -27,21 +27,21 @@ pub mod schnorr_const {
 }
 
 /// Total trace width for the state transition AIR program
-// The 6 extra registers are for copying the public keys, delta and the new sender balance
-pub const TRACE_WIDTH: usize = merkle_const::TRACE_WIDTH + 7;
+// The extra registers are for copying the public keys, delta and the new sender balance
+pub const TRACE_WIDTH: usize = NONCE_COPY_POS + 3;
 
 /// The width of the trace used for Merkle registers
 pub const MERKLE_REGISTER_WIDTH: usize = merkle_const::TRACE_WIDTH;
 /// Beginning position of the copy of the sender's public key
 pub const SENDER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH;
 /// Beginning position of the copy of the receiver's public key
-pub const RECEIVER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + 2;
+pub const RECEIVER_KEY_POINT_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH;
 /// Position of the register copying delta
-pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 4;
+pub const DELTA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH * 2;
 /// Position of the register copying the sender's updated balance
-pub const SIGMA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 5;
+pub const SIGMA_COPY_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH * 2 + 1;
 /// Position of the register copying the sender's updated nonce
-pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + 6;
+pub const NONCE_COPY_POS: usize = MERKLE_REGISTER_WIDTH + schnorr_const::AFFINE_POINT_WIDTH * 2 + 2;
 
 //  Indices for the constraint results for various components
 /// Beginning index of constraints for the copy of the sender's public key
@@ -66,9 +66,9 @@ pub const DELTA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH;
 /// Position of the accumulated value for delta
 pub const DELTA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 1;
 /// Position of the bit decomposition of sigma
-pub const SIGMA_BIT_POS: usize = SCHNORR_REGISTER_WIDTH + 2;
+pub const SIGMA_BIT_POS: usize = NONCE_COPY_POS + 1;
 /// Position of the accumulated value for delta
-pub const SIGMA_ACCUMULATE_POS: usize = SCHNORR_REGISTER_WIDTH + 3;
+pub const SIGMA_ACCUMULATE_POS: usize = NONCE_COPY_POS + 2;
 
 /// Total length for verifying a transaction
 // Dominated by the Merkle authentication paths and the Schnorr signature verification
@@ -78,28 +78,31 @@ pub const TRANSACTION_CYCLE_LENGTH: usize = merkle_const::TRANSACTION_CYCLE_LENG
 /// The index for the transaction setup mask
 pub const SETUP_MASK_INDEX: usize = 0;
 /// The index for the transaction hash mask
-pub const MERKLE_MASK_INDEX: usize = 1;
+pub const MERKLE_MASK_INDEX: usize = SETUP_MASK_INDEX + 1;
 /// The index for the hash input mask
-pub const HASH_INPUT_MASK_INDEX: usize = 2;
+pub const HASH_INPUT_MASK_INDEX: usize = MERKLE_MASK_INDEX + 1;
 /// The index for the transaction finish mask
-pub const FINISH_MASK_INDEX: usize = 3;
+pub const FINISH_MASK_INDEX: usize = HASH_INPUT_MASK_INDEX + 1;
 /// The index for the general hash mask
-pub const HASH_MASK_INDEX: usize = 4;
+pub const HASH_MASK_INDEX: usize = FINISH_MASK_INDEX + 1;
 /// The index for the overall Schnorr mask
-pub const SCHNORR_MASK_INDEX: usize = 5;
+pub const SCHNORR_MASK_INDEX: usize = HASH_MASK_INDEX + 1;
 /// The index for the scalar multiplication mask
-pub const SCALAR_MULT_MASK_INDEX: usize = 6;
+pub const SCALAR_MULT_MASK_INDEX: usize = SCHNORR_MASK_INDEX + 1;
 /// The index for the point doubling mask
-pub const DOUBLING_MASK_INDEX: usize = 7;
+pub const DOUBLING_MASK_INDEX: usize = SCALAR_MULT_MASK_INDEX + 1;
+/// The index for the hash digest registers mask
+pub const SCHNORR_DIGEST_MASK_INDEX: usize = DOUBLING_MASK_INDEX + 1;
 /// The index for the Schnorr hash mask
-pub const SCHNORR_HASH_MASK_INDEX: usize = 8;
+pub const SCHNORR_HASH_MASK_INDEX: usize = SCHNORR_DIGEST_MASK_INDEX + 4;
 /// The starting index for the flags for copying parts to the hash internal inputs
-pub const HASH_INTERNAL_INPUT_MASKS_INDEX: usize = 9;
+pub const HASH_INTERNAL_INPUT_MASKS_INDEX: usize = SCHNORR_HASH_MASK_INDEX + 1;
 /// The index for the mask specifying range proof computations
-pub const RANGE_PROOF_STEP_MASK_INDEX: usize = 12;
+pub const RANGE_PROOF_STEP_MASK_INDEX: usize =
+    HASH_INTERNAL_INPUT_MASKS_INDEX + schnorr_const::NUM_HASH_ITER - 1;
 /// The index for the mask checking final range proof equality
-pub const RANGE_PROOF_FINISH_MASK_INDEX: usize = 13;
+pub const RANGE_PROOF_FINISH_MASK_INDEX: usize = RANGE_PROOF_STEP_MASK_INDEX + 1;
 /// The index for the mask checking carry-over of values from Merkle to Schnorr
-pub const VALUE_COPY_MASK_INDEX: usize = 14;
+pub const VALUE_COPY_MASK_INDEX: usize = RANGE_PROOF_FINISH_MASK_INDEX + 1;
 /// The starting index for the Rescue round constants
-pub const ARK_INDEX: usize = 15;
+pub const ARK_INDEX: usize = VALUE_COPY_MASK_INDEX + 1;

@@ -7,7 +7,7 @@ use super::constants::*;
 use crate::utils::rescue::{self, HASH_CYCLE_MASK};
 use crate::utils::{are_equal, is_binary, not, EvaluationResult};
 use winterfell::{
-    math::{fields::f252::BaseElement, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
@@ -16,8 +16,8 @@ use winterfell::{
 // ================================================================================================
 
 pub struct PublicInputs {
-    pub initial_root: [BaseElement; 2],
-    pub final_root: [BaseElement; 2],
+    pub initial_root: [BaseElement; HASH_RATE_WIDTH],
+    pub final_root: [BaseElement; HASH_RATE_WIDTH],
 }
 
 impl Serializable for PublicInputs {
@@ -29,8 +29,8 @@ impl Serializable for PublicInputs {
 
 pub struct MerkleAir {
     context: AirContext<BaseElement>,
-    initial_root: [BaseElement; 2],
-    final_root: [BaseElement; 2],
+    initial_root: [BaseElement; HASH_RATE_WIDTH],
+    final_root: [BaseElement; HASH_RATE_WIDTH],
 }
 
 impl Air for MerkleAir {
@@ -40,37 +40,7 @@ impl Air for MerkleAir {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
-        // Constraint degrees for enforcement of Rescue hash rounds
-        let mut hash_constraint_degrees =
-            vec![
-                TransitionConstraintDegree::with_cycles(3, vec![TRANSACTION_CYCLE_LENGTH]);
-                HASH_STATE_WIDTH
-            ];
-
-        // Constraint degrees of authentication paths for a Merkle tree update
-        let mut update_auth_degrees = Vec::new();
-        // Initial value hash constraints
-        update_auth_degrees.append(&mut hash_constraint_degrees.clone());
-        // Bits of index into Merkle tree
-        update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
-            2,
-            vec![TRANSACTION_CYCLE_LENGTH],
-        ));
-        // Initial value hash constraints
-        update_auth_degrees.append(&mut hash_constraint_degrees);
-
-        // Degrees for all constraints
-        let mut degrees = Vec::new();
-        // Authentication paths for updating sender and receiver
-        degrees.append(&mut update_auth_degrees.clone());
-        degrees.append(&mut update_auth_degrees);
-        // Remaining constraints (prev root copy, balance update, intermediate root match, and prev root match)
-        let mut remaining_degrees =
-            vec![
-                TransitionConstraintDegree::with_cycles(1, vec![TRANSACTION_CYCLE_LENGTH]);
-                PREV_TREE_MATCH_RES + 2 - PREV_TREE_ROOT_RES
-            ];
-        degrees.append(&mut remaining_degrees);
+        let degrees = transition_constraint_degrees(TRANSACTION_CYCLE_LENGTH);
 
         assert_eq!(TRACE_WIDTH, trace_info.width());
         MerkleAir {
@@ -105,57 +75,55 @@ impl Air for MerkleAir {
         let ark = &periodic_values[5..];
 
         // Enforce no change in registers representing keys
-        result.agg_constraint(
-            VALUE_CONSTRAINT_RES,
-            transaction_setup_flag,
-            are_equal(current[SENDER_INITIAL_POS], current[SENDER_UPDATED_POS]),
-        );
-        result.agg_constraint(
-            VALUE_CONSTRAINT_RES + 1,
-            transaction_setup_flag,
-            are_equal(
-                current[SENDER_INITIAL_POS + 1],
-                current[SENDER_UPDATED_POS + 1],
-            ),
-        );
-        result.agg_constraint(
-            VALUE_CONSTRAINT_RES + 2,
-            transaction_setup_flag,
-            are_equal(current[RECEIVER_INITIAL_POS], current[RECEIVER_UPDATED_POS]),
-        );
-        result.agg_constraint(
-            VALUE_CONSTRAINT_RES + 3,
-            transaction_setup_flag,
-            are_equal(
-                current[RECEIVER_INITIAL_POS + 1],
-                current[RECEIVER_UPDATED_POS + 1],
-            ),
-        );
+        for i in 0..AFFINE_POINT_WIDTH {
+            result.agg_constraint(
+                VALUE_CONSTRAINT_RES + i,
+                transaction_setup_flag,
+                are_equal(
+                    current[SENDER_INITIAL_POS + i],
+                    current[SENDER_UPDATED_POS + i],
+                ),
+            );
+
+            result.agg_constraint(
+                VALUE_CONSTRAINT_RES + AFFINE_POINT_WIDTH + i,
+                transaction_setup_flag,
+                are_equal(
+                    current[RECEIVER_INITIAL_POS + i],
+                    current[RECEIVER_UPDATED_POS + i],
+                ),
+            );
+        }
+
         // Enforce no change in the receiver's nonce
         result.agg_constraint(
-            VALUE_CONSTRAINT_RES + 4,
+            VALUE_CONSTRAINT_RES + AFFINE_POINT_WIDTH * 2,
             transaction_setup_flag,
             are_equal(
-                current[RECEIVER_INITIAL_POS + 3],
-                current[RECEIVER_UPDATED_POS + 3],
+                current[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH + 1],
+                current[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH + 1],
             ),
         );
+
         // Enforce that the change in balances cancels out
         result.agg_constraint(
             BALANCE_CONSTRAINT_RES,
             transaction_setup_flag,
             are_equal(
-                current[SENDER_INITIAL_POS + 2] - current[SENDER_UPDATED_POS + 2],
-                current[RECEIVER_UPDATED_POS + 2] - current[RECEIVER_INITIAL_POS + 2],
+                current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH]
+                    - current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH],
+                current[RECEIVER_UPDATED_POS + AFFINE_POINT_WIDTH]
+                    - current[RECEIVER_INITIAL_POS + AFFINE_POINT_WIDTH],
             ),
         );
+
         // Enforce change in the sender's nonce
         result.agg_constraint(
             NONCE_UPDATE_CONSTRAINT_RES,
             transaction_setup_flag,
             are_equal(
-                current[SENDER_UPDATED_POS + 3],
-                current[SENDER_INITIAL_POS + 3] + E::ONE,
+                current[SENDER_UPDATED_POS + AFFINE_POINT_WIDTH + 1],
+                current[SENDER_INITIAL_POS + AFFINE_POINT_WIDTH + 1] + E::ONE,
             ),
         );
 
@@ -173,17 +141,28 @@ impl Air for MerkleAir {
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
         // assert that Merkle path resolves to the tree root, and that hash capacity
-        // registers (registers 4 and 5) are reset to ZERO every 8 steps
-        // Now we must also resolve to the new root and regiters 7 and 8 are also
+        // registers are reset to ZERO every 8 steps
+        // Now we must also resolve to the new root and the next registers are also
         // hash capacity registers
         // Additionally, we repeat all of this for the receiver
         let last_step = self.trace_length() - 1;
-        vec![
-            Assertion::single(PREV_TREE_ROOT_POS, 0, self.initial_root[0]),
-            Assertion::single(PREV_TREE_ROOT_POS + 1, 0, self.initial_root[1]),
-            Assertion::single(PREV_TREE_ROOT_POS, last_step, self.final_root[0]),
-            Assertion::single(PREV_TREE_ROOT_POS + 1, last_step, self.final_root[1]),
-        ]
+        let mut vec = Vec::with_capacity(HASH_STATE_WIDTH);
+        for i in 0..HASH_RATE_WIDTH {
+            vec.push(Assertion::single(
+                PREV_TREE_ROOT_POS + i,
+                0,
+                self.initial_root[i],
+            ));
+        }
+        for i in 0..HASH_RATE_WIDTH {
+            vec.push(Assertion::single(
+                PREV_TREE_ROOT_POS + i,
+                last_step,
+                self.final_root[i],
+            ));
+        }
+
+        vec
     }
 
     fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
@@ -262,58 +241,45 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
 
     // Enforce proper copying of the previous root hash for continuity between one transaction and the next
-    result.agg_constraint(
-        PREV_TREE_ROOT_RES,
-        not_transaction_finish_flag,
-        are_equal(next[PREV_TREE_ROOT_POS], current[PREV_TREE_ROOT_POS]),
-    );
-    result.agg_constraint(
-        PREV_TREE_ROOT_RES + 1,
-        not_transaction_finish_flag,
-        are_equal(
-            next[PREV_TREE_ROOT_POS + 1],
-            current[PREV_TREE_ROOT_POS + 1],
-        ),
-    );
-    result.agg_constraint(
-        PREV_TREE_ROOT_RES,
-        transaction_finish_flag,
-        are_equal(next[PREV_TREE_ROOT_POS], next[RECEIVER_UPDATED_POS]),
-    );
-    result.agg_constraint(
-        PREV_TREE_ROOT_RES + 1,
-        transaction_finish_flag,
-        are_equal(next[PREV_TREE_ROOT_POS + 1], next[RECEIVER_UPDATED_POS + 1]),
-    );
+    for i in 0..HASH_RATE_WIDTH {
+        result.agg_constraint(
+            PREV_TREE_ROOT_RES + i,
+            not_transaction_finish_flag,
+            are_equal(
+                next[PREV_TREE_ROOT_POS + i],
+                current[PREV_TREE_ROOT_POS + i],
+            ),
+        );
+        result.agg_constraint(
+            PREV_TREE_ROOT_RES + i,
+            transaction_finish_flag,
+            are_equal(next[PREV_TREE_ROOT_POS + i], next[RECEIVER_UPDATED_POS + i]),
+        );
+    }
 
     // Enforce equality of the intermediate hash for continuity between sender and receiver updates
-    result.agg_constraint(
-        INT_ROOT_EQUALITY_RES,
-        transaction_finish_flag,
-        are_equal(current[SENDER_UPDATED_POS], current[RECEIVER_INITIAL_POS]),
-    );
-    result.agg_constraint(
-        INT_ROOT_EQUALITY_RES + 1,
-        transaction_finish_flag,
-        are_equal(
-            current[SENDER_UPDATED_POS + 1],
-            current[RECEIVER_INITIAL_POS + 1],
-        ),
-    );
+    for i in 0..HASH_RATE_WIDTH {
+        result.agg_constraint(
+            INT_ROOT_EQUALITY_RES + i,
+            transaction_finish_flag,
+            are_equal(
+                current[SENDER_UPDATED_POS + i],
+                current[RECEIVER_INITIAL_POS + i],
+            ),
+        );
+    }
+
     // Enforce a match between the previous root after recevier update and the current root before sender update
-    result.agg_constraint(
-        PREV_TREE_MATCH_RES,
-        transaction_finish_flag,
-        are_equal(next[SENDER_INITIAL_POS], current[PREV_TREE_ROOT_POS]),
-    );
-    result.agg_constraint(
-        PREV_TREE_MATCH_RES + 1,
-        transaction_finish_flag,
-        are_equal(
-            next[SENDER_INITIAL_POS + 1],
-            current[PREV_TREE_ROOT_POS + 1],
-        ),
-    );
+    for i in 0..HASH_RATE_WIDTH {
+        result.agg_constraint(
+            PREV_TREE_MATCH_RES + i,
+            transaction_finish_flag,
+            are_equal(
+                next[SENDER_INITIAL_POS + i],
+                current[PREV_TREE_ROOT_POS + i],
+            ),
+        );
+    }
 }
 
 pub fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
@@ -348,63 +314,80 @@ pub fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
             ark,
             hash_flag,
         );
-        // Copy outputs of hashes to next level as inputs
-        result.agg_constraint(
-            res_index,
-            hash_copy_flag,
-            are_equal(current[reg_index], next[reg_index]),
-        );
-        result.agg_constraint(
-            res_index + 1,
-            hash_copy_flag,
-            are_equal(current[reg_index + 1], next[reg_index + 1]),
-        );
 
-        // When hash_flag = 0, make sure accumulated hash is placed in the right place in the hash
-        // state for the next round of hashing. Specifically: when index bit = 0, accumulated hash
-        // must go into registers [0, 1], and when index bit = 1, it must go into registers [2, 3]
-        result.agg_constraint(
-            res_index,
-            hash_init_flag,
-            not_bit * are_equal(current[reg_index], next[reg_index]),
-        );
-        result.agg_constraint(
-            res_index + 1,
-            hash_init_flag,
-            not_bit * are_equal(current[reg_index + 1], next[reg_index + 1]),
-        );
-        result.agg_constraint(
-            res_index + 2,
-            hash_init_flag,
-            bit * are_equal(current[reg_index], next[reg_index + 2]),
-        );
-        result.agg_constraint(
-            res_index + 3,
-            hash_init_flag,
-            bit * are_equal(current[reg_index + 1], next[reg_index + 3]),
-        );
+        for i in 0..HASH_RATE_WIDTH {
+            // Copy outputs of hashes to next level as inputs
+            result.agg_constraint(
+                res_index + i,
+                hash_copy_flag,
+                are_equal(current[reg_index + i], next[reg_index + i]),
+            );
+
+            // When hash_flag = 0, make sure accumulated hash is placed in the right place in the hash
+            // state for the next round of hashing. Specifically: when index bit = 0, accumulated hash
+            // must go into the capacity registers, and when index bit = 1, it must go into the rate registers
+            result.agg_constraint(
+                res_index + i,
+                hash_init_flag,
+                not_bit * are_equal(current[reg_index + i], next[reg_index + i]),
+            );
+
+            result.agg_constraint(
+                res_index + HASH_RATE_WIDTH + i,
+                hash_init_flag,
+                bit * are_equal(
+                    current[reg_index + i],
+                    next[reg_index + HASH_RATE_WIDTH + i],
+                ),
+            );
+        }
     }
 
     // Ensure that the same sibling hashes are fed in for proof of update. Must be in whichever
-    // positons were not used above
-    result.agg_constraint(
-        0,
-        hash_init_flag,
-        bit * are_equal(next[HASH_STATE_WIDTH + 1], next[0]),
-    );
-    result.agg_constraint(
-        1,
-        hash_init_flag,
-        bit * are_equal(next[HASH_STATE_WIDTH + 2], next[1]),
-    );
-    result.agg_constraint(
+    // positions were not used above
+    for i in 0..HASH_RATE_WIDTH {
+        result.agg_constraint(
+            i,
+            hash_init_flag,
+            bit * are_equal(next[HASH_STATE_WIDTH + 1 + i], next[i]),
+        );
+    }
+
+    for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH {
+        result.agg_constraint(
+            i,
+            hash_init_flag,
+            not_bit * are_equal(next[HASH_STATE_WIDTH + 1 + i], next[i]),
+        );
+    }
+}
+
+pub fn transition_constraint_degrees(cycle_length: usize) -> Vec<TransitionConstraintDegree> {
+    // Constraint degrees for enforcement of Rescue hash rounds
+    let mut hash_constraint_degrees =
+        vec![TransitionConstraintDegree::with_cycles(3, vec![cycle_length]); HASH_STATE_WIDTH];
+
+    // Constraint degrees of authentication paths for a Merkle tree update
+    let mut update_auth_degrees = hash_constraint_degrees.clone();
+    // Bits of index into Merkle tree
+    update_auth_degrees.push(TransitionConstraintDegree::with_cycles(
         2,
-        hash_init_flag,
-        not_bit * are_equal(next[HASH_STATE_WIDTH + 3], next[2]),
-    );
-    result.agg_constraint(
-        3,
-        hash_init_flag,
-        not_bit * are_equal(next[HASH_STATE_WIDTH + 4], next[3]),
-    );
+        vec![cycle_length],
+    ));
+
+    // Initial value hash constraints
+    update_auth_degrees.append(&mut hash_constraint_degrees);
+
+    // Remaining constraints (prev root copy, balance update, intermediate root match, and prev root match)
+    let mut remaining_degrees = vec![
+        TransitionConstraintDegree::with_cycles(1, vec![cycle_length]);
+        PREV_TREE_MATCH_RES + HASH_RATE_WIDTH - PREV_TREE_ROOT_RES
+    ];
+
+    // Degrees for all constraints
+    let mut degrees = update_auth_degrees.clone();
+    degrees.append(&mut update_auth_degrees);
+    degrees.append(&mut remaining_degrees);
+
+    degrees
 }
