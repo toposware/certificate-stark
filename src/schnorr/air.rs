@@ -254,22 +254,19 @@ impl Air for SchnorrAir {
 
         for message_index in 0..self.signatures.len() {
             for i in 0..SIG_CYCLE_LENGTH {
-                for j in 0..HASH_RATE_WIDTH {
+                for (j, input) in hash_intermediate_inputs
+                    .iter_mut()
+                    .enumerate()
+                    .take(HASH_RATE_WIDTH)
+                {
                     if i < NUM_HASH_ITER - 1 {
-                        hash_intermediate_inputs[j][i * HASH_CYCLE_LENGTH
+                        input[i * HASH_CYCLE_LENGTH
                             + NUM_HASH_ROUNDS
                             + message_index * SIG_CYCLE_LENGTH] =
                             self.messages[message_index][j + i * HASH_RATE_WIDTH];
                     }
-                    pub_keys[j][i + message_index * SIG_CYCLE_LENGTH] =
-                        self.messages[message_index][j];
                 }
-                for (j, key) in pub_keys
-                    .iter_mut()
-                    .enumerate()
-                    .take(AFFINE_POINT_WIDTH)
-                    .skip(HASH_RATE_WIDTH)
-                {
+                for (j, key) in pub_keys.iter_mut().enumerate().take(AFFINE_POINT_WIDTH) {
                     key[i + message_index * SIG_CYCLE_LENGTH] = self.messages[message_index][j];
                 }
             }
