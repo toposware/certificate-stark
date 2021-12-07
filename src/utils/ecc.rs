@@ -16,8 +16,8 @@ pub const AFFINE_POINT_WIDTH: usize = POINT_COORDINATE_WIDTH * 2;
 /// The length of a ProjectivePoint
 pub const PROJECTIVE_POINT_WIDTH: usize = POINT_COORDINATE_WIDTH * 3;
 
-/// Specifies the projective coordinates of the curve generator G
-pub const GENERATOR: [BaseElement; PROJECTIVE_POINT_WIDTH] = [
+/// Specifies the affine coordinates of the curve generator G
+pub const GENERATOR: [BaseElement; AFFINE_POINT_WIDTH] = [
     BaseElement::from_raw_unchecked(0xf6798582c92ece1),
     BaseElement::from_raw_unchecked(0x2b7c30a4c7d886c0),
     BaseElement::from_raw_unchecked(0x1269cdae98dc2fd0),
@@ -30,12 +30,6 @@ pub const GENERATOR: [BaseElement; PROJECTIVE_POINT_WIDTH] = [
     BaseElement::from_raw_unchecked(0x3df7b90927efc7ec),
     BaseElement::from_raw_unchecked(0xab8bbf4a53af6a0),
     BaseElement::from_raw_unchecked(0xe13dca26b2ac6ab),
-    BaseElement::ONE,
-    BaseElement::ZERO,
-    BaseElement::ZERO,
-    BaseElement::ZERO,
-    BaseElement::ZERO,
-    BaseElement::ZERO,
 ];
 
 pub const B3: [BaseElement; POINT_COORDINATE_WIDTH] = [
@@ -59,6 +53,13 @@ pub fn apply_point_doubling(state: &mut [BaseElement]) {
 pub fn apply_point_addition(state: &mut [BaseElement], point: &[BaseElement]) {
     if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
         compute_add(state, point)
+    };
+}
+
+/// Apply a point mixed addition between the current `state` registers with a given point.
+pub fn apply_point_addition_mixed(state: &mut [BaseElement], point: &[BaseElement]) {
+    if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
+        compute_add_mixed(state, point)
     };
 }
 
@@ -93,9 +94,9 @@ pub fn enforce_point_doubling<E: FieldElement + From<BaseElement>>(
     );
 }
 
-/// When flag = 1, enforces constraints for performing a point addition
+/// When flag = 1, enforces constraints for performing a mixed point addition
 /// between current and point.
-pub fn enforce_point_addition<E: FieldElement + From<BaseElement>>(
+pub fn enforce_point_addition_mixed<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -108,7 +109,7 @@ pub fn enforce_point_addition<E: FieldElement + From<BaseElement>>(
     let mut step2 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
     step2.copy_from_slice(&next[0..PROJECTIVE_POINT_WIDTH]);
 
-    compute_add(&mut step1, point);
+    compute_add_mixed(&mut step1, point);
     let adding_bit = current[PROJECTIVE_POINT_WIDTH];
 
     for i in 0..PROJECTIVE_POINT_WIDTH {
@@ -134,7 +135,7 @@ pub fn enforce_point_addition<E: FieldElement + From<BaseElement>>(
 }
 
 /// When flag = 1, enforces constraints for performing a point addition
-/// between current and point.
+/// between current and point in projective coordinates.
 ///
 /// In the current implementation, this is being used only once, at the final step,
 /// so we add a division of register 0 by register 2 to obtain the final affine
@@ -316,6 +317,82 @@ fn compute_add<E: FieldElement + From<BaseElement>>(state: &mut [E], point: &[E]
     let t0 = mul_fp6(&t3, &t1);
     let z3 = mul_fp6(&t5, &z3);
 
+    let z3 = add_fp6(&z3, &t0);
+
+    state[0..POINT_COORDINATE_WIDTH].copy_from_slice(&x3);
+    state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&y3);
+    state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH].copy_from_slice(&z3);
+}
+
+/// Compute the addition of the current point, stored as [X,Y,Z], with a given one
+/// in affine coordinate (Z2 == 1).
+/// Addition is computed as:
+///
+/// `X3 = (X1.Y2 + X2.Y1) (Y1.Y2 −(X1 + X2.Z1) − 3B.Z1)
+///         − (Y1 + Y2.Z1) (X1.X2 + 3B(X1 + X2.Z1) − Z1)`
+///
+/// `Y3 = (3X1.X2 + Z1) (X1.X2 + 3B(X1 + X2.Z1) − Z1)
+///         + (Y1.Y2 + (X1 + X2.Z1) + 3B.Z1) (Y1.Y2 −(X1 + X2.Z1) − 3B.Z1)`
+///
+/// `Z3 = (Y1 + Y2.Z1) (Y1.Y2 + (X1 + X2.Z1) + 3B.Z1)
+///         + (X1.Y2 + X2.Y1) (3X1.X2 + Z1)`
+#[inline(always)]
+fn compute_add_mixed<E: FieldElement + From<BaseElement>>(state: &mut [E], point: &[E]) {
+    let self_x = &state[0..POINT_COORDINATE_WIDTH];
+    let self_y = &state[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
+    let self_z = &state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH];
+
+    let rhs_x = &point[0..POINT_COORDINATE_WIDTH];
+    let rhs_y = &point[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH];
+
+    let b3 = [
+        E::from(B3[0]),
+        E::from(B3[1]),
+        E::from(B3[2]),
+        E::from(B3[3]),
+        E::from(B3[4]),
+        E::from(B3[5]),
+    ];
+
+    let t0 = mul_fp6(self_x, rhs_x);
+    let t1 = mul_fp6(self_y, rhs_y);
+    let t3 = add_fp6(rhs_x, rhs_y);
+
+    let t4 = add_fp6(self_x, self_y);
+    let t3 = mul_fp6(&t3, &t4);
+    let t4 = add_fp6(&t0, &t1);
+
+    let t3 = sub_fp6(&t3, &t4);
+    let t4 = mul_fp6(rhs_x, self_z);
+    let t4 = add_fp6(&t4, self_x);
+
+    let t5 = mul_fp6(rhs_y, self_z);
+    let t5 = add_fp6(&t5, self_y);
+
+    let x3 = mul_fp6(self_z, &b3);
+    let z3 = add_fp6(&x3, &t4);
+    let x3 = sub_fp6(&t1, &z3);
+
+    let z3 = add_fp6(&t1, &z3);
+    let y3 = mul_fp6(&x3, &z3);
+    let t1 = double_fp6(&t0);
+
+    let t1 = add_fp6(&t1, &t0);
+    let t4 = mul_fp6(&t4, &b3);
+
+    let t1 = add_fp6(&t1, self_z);
+    let t2 = sub_fp6(&t0, self_z);
+
+    let t4 = add_fp6(&t4, &t2);
+    let t0 = mul_fp6(&t1, &t4);
+    let y3 = add_fp6(&y3, &t0);
+
+    let t0 = mul_fp6(&t5, &t4);
+    let x3 = mul_fp6(&t3, &x3);
+    let x3 = sub_fp6(&x3, &t0);
+
+    let t0 = mul_fp6(&t3, &t1);
+    let z3 = mul_fp6(&t5, &z3);
     let z3 = add_fp6(&z3, &t0);
 
     state[0..POINT_COORDINATE_WIDTH].copy_from_slice(&x3);

@@ -20,8 +20,7 @@ use winterfell::iterators::*;
 
 use merkle_const::TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH;
 use schnorr_const::{
-    AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH, PROJECTIVE_POINT_WIDTH,
-    SIG_CYCLE_LENGTH as SCHNORR_LENGTH,
+    AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH, SIG_CYCLE_LENGTH as SCHNORR_LENGTH,
 };
 
 // TRACE GENERATOR
@@ -155,7 +154,7 @@ pub fn update_transaction_state(
     sig_bits: &BitSlice<Lsb0, u8>,
     sig_hash_bits: &BitSlice<Lsb0, u8>,
     message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
-    pkey_point: [BaseElement; PROJECTIVE_POINT_WIDTH],
+    pkey_point: [BaseElement; AFFINE_POINT_WIDTH],
     state: &mut [BaseElement],
 ) {
     let merkle_update_flag = step < MERKLE_UPDATE_LENGTH - 1;

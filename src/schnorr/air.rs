@@ -403,8 +403,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     let generator_point: Vec<E> = GENERATOR.iter().map(|&coord| coord.into()).collect();
 
     // Point to be used in the double-and-add operations of registers [PROJECTIVE_POINT_WIDTH + 1..PROJECTIVE_POINT_WIDTH * 2 + 1] (h.P)
-    let mut pkey_point: Vec<E> = pkey_point.to_vec();
-    pkey_point.extend_from_slice(&[E::ONE, E::ZERO, E::ZERO, E::ZERO, E::ZERO, E::ZERO]); // z(P)
+    let pkey_point: Vec<E> = pkey_point.to_vec();
 
     // When scalar_mult_flag = 1, constraints for a double-and-add
     // step are enforced on the dedicated registers for S and h.P,
@@ -418,7 +417,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         doubling_flag,
     );
 
-    ecc::enforce_point_addition(
+    ecc::enforce_point_addition_mixed(
         &mut result[..PROJECTIVE_POINT_WIDTH + 1],
         &current[..PROJECTIVE_POINT_WIDTH + 1],
         &next[..PROJECTIVE_POINT_WIDTH + 1],
@@ -434,7 +433,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         doubling_flag,
     );
 
-    ecc::enforce_point_addition(
+    ecc::enforce_point_addition_mixed(
         &mut result[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
         &current[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
         &next[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
