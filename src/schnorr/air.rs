@@ -209,12 +209,42 @@ impl Air for SchnorrAir {
         // hence checking the x_coord of R in the first registers (i.e. x(S))
         // TODO: find a way to do this better with indexing
         assertions.append(&mut vec![
-            Assertion::sequence(0, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.0),
-            Assertion::sequence(1, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.1),
-            Assertion::sequence(2, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.2),
-            Assertion::sequence(3, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.3),
-            Assertion::sequence(4, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.4),
-            Assertion::sequence(5, SCALAR_MUL_LENGTH + 1, SIG_CYCLE_LENGTH, signatures.5),
+            Assertion::sequence(
+                PROJECTIVE_POINT_WIDTH + 1,
+                SCALAR_MUL_LENGTH + 1,
+                SIG_CYCLE_LENGTH,
+                signatures.0,
+            ),
+            Assertion::sequence(
+                PROJECTIVE_POINT_WIDTH + 2,
+                SCALAR_MUL_LENGTH + 1,
+                SIG_CYCLE_LENGTH,
+                signatures.1,
+            ),
+            Assertion::sequence(
+                PROJECTIVE_POINT_WIDTH + 3,
+                SCALAR_MUL_LENGTH + 1,
+                SIG_CYCLE_LENGTH,
+                signatures.2,
+            ),
+            Assertion::sequence(
+                PROJECTIVE_POINT_WIDTH + 4,
+                SCALAR_MUL_LENGTH + 1,
+                SIG_CYCLE_LENGTH,
+                signatures.3,
+            ),
+            Assertion::sequence(
+                PROJECTIVE_POINT_WIDTH + 5,
+                SCALAR_MUL_LENGTH + 1,
+                SIG_CYCLE_LENGTH,
+                signatures.4,
+            ),
+            Assertion::sequence(
+                PROJECTIVE_POINT_WIDTH + 6,
+                SCALAR_MUL_LENGTH + 1,
+                SIG_CYCLE_LENGTH,
+                signatures.5,
+            ),
         ]);
 
         assertions
@@ -408,11 +438,25 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     // When scalar_mult_flag = 1, constraints for a double-and-add
     // step are enforced on the dedicated registers for S and h.P,
     // as well as a double-and-add in the field for bin(h).
+    //
+    // We rely on Shamir's trick to remove the doubling cycle of the
+    // second scalar multiplication. Namely, let A be the accumulator
+    // value at step i of the "double-and-add-and-add" algorithm, and
+    // let G be the group generator, P be the public key. We denote s
+    // and h respectively the scalars used for computing s.G + h.P.
+    // Let L be the width used to represent a point in projective
+    // coordinates in the trace. The trace layout is then the following:
+    //
+    // |          0..L         |   L   |    L + 1..2L + 1   | 2L + 2 |
+    // |-----------------------|-------|--------------------|--------|
+    // |           A           | s_i_1 |          X         |  h_i-1 |
+    // |          2A           |  s_i  |          X         |   h_i  |
+    // |      2A + s_i.G       |  s_i  | 2A + s_i.G + h_i.P |   h_i  |
+    // | 2(2A + s_i.G + h_i.P) | s_i+1 | 2A + s_i.G + h_i.P |  h_i+1 |
 
-    // Enforce a step of double-and-add in the group for s.G
     ecc::enforce_point_doubling(
-        &mut result[..PROJECTIVE_POINT_WIDTH + 1],
-        &current[..PROJECTIVE_POINT_WIDTH + 1],
+        &mut result[..2 * PROJECTIVE_POINT_WIDTH + 2],
+        &current[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
         &next[..PROJECTIVE_POINT_WIDTH + 1],
         doubling_flag,
     );
@@ -425,19 +469,13 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
         addition_flag,
     );
 
-    // Enforce a step of double-and-add in the group for h.P
-    ecc::enforce_point_doubling(
-        &mut result[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
-        &current[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
-        &next[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
-        doubling_flag,
-    );
-
-    ecc::enforce_point_addition_mixed(
-        &mut result[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
-        &current[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
-        &next[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
+    ecc::enforce_point_addition_mixed_same_row(
+        &mut result[0..2 * PROJECTIVE_POINT_WIDTH + 2],
+        &current[0..2 * PROJECTIVE_POINT_WIDTH + 2],
+        &next[0..2 * PROJECTIVE_POINT_WIDTH + 2],
         &pkey_point,
+        0,
+        PROJECTIVE_POINT_WIDTH + 1,
         addition_flag,
     );
 
@@ -502,11 +540,10 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     // R = S + h.P and enforce h = hash output
 
     // Add h.P to S, with the result stored directly in the coordinates of S
-    ecc::enforce_point_addition_reduce_x(
+    ecc::enforce_point_reduce_x(
         &mut result[..PROJECTIVE_POINT_WIDTH],
-        &current[..PROJECTIVE_POINT_WIDTH], // S
-        &next[..PROJECTIVE_POINT_WIDTH],
-        &current[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 1], // h.P
+        &current[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
+        &next[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
         final_point_addition_flag,
     );
 
@@ -531,19 +568,10 @@ pub fn transition_constraint_degrees(
     let bit_degree = if num_tx == 1 { 3 } else { 5 };
 
     // First scalar multiplication
-    let mut degrees =
-        vec![
-            TransitionConstraintDegree::with_cycles(5, vec![cycle_length, cycle_length]);
-            POINT_COORDINATE_WIDTH
-        ];
-
-    // The x coordinate also stores the final point reduction, hence the first degrees are higher
-    for _ in 0..AFFINE_POINT_WIDTH {
-        degrees.push(TransitionConstraintDegree::with_cycles(
-            4,
-            vec![cycle_length, cycle_length],
-        ));
-    }
+    let mut degrees = vec![
+        TransitionConstraintDegree::with_cycles(4, vec![cycle_length]);
+        PROJECTIVE_POINT_WIDTH
+    ];
     degrees.push(TransitionConstraintDegree::with_cycles(
         2,
         vec![cycle_length],

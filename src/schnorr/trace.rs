@@ -115,9 +115,10 @@ pub fn update_sig_verification_state(
                 BaseElement::from(h_bits[bit_length - 1 - real_step] as u8);
 
             if is_doubling_step {
-                ecc::apply_point_doubling(&mut state[0..PROJECTIVE_POINT_WIDTH + 1]);
                 ecc::apply_point_doubling(
-                    &mut state[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
+                    &mut state[0..PROJECTIVE_POINT_WIDTH * 2 + 2],
+                    PROJECTIVE_POINT_WIDTH + 1,
+                    0,
                 );
                 field::apply_double_and_add_step(
                     &mut state[2 * PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 6],
@@ -128,26 +129,30 @@ pub fn update_sig_verification_state(
                 ecc::apply_point_addition_mixed(
                     &mut state[0..PROJECTIVE_POINT_WIDTH + 1],
                     &GENERATOR,
+                    0,
+                    0,
                 );
                 ecc::apply_point_addition_mixed(
-                    &mut state[PROJECTIVE_POINT_WIDTH + 1..2 * PROJECTIVE_POINT_WIDTH + 2],
+                    &mut state[0..2 * PROJECTIVE_POINT_WIDTH + 2],
                     &pkey_point,
+                    0,
+                    PROJECTIVE_POINT_WIDTH + 1,
                 );
             }
         }
         Ordering::Equal => {
-            let mut hp_point = [BaseElement::ZERO; PROJECTIVE_POINT_WIDTH];
-            hp_point.copy_from_slice(
-                &state[PROJECTIVE_POINT_WIDTH + 1..PROJECTIVE_POINT_WIDTH * 2 + 1],
-            );
-            state[PROJECTIVE_POINT_WIDTH] = BaseElement::ONE;
-            ecc::apply_point_addition(&mut state[..PROJECTIVE_POINT_WIDTH + 1], &hp_point);
             // Affine coordinates, hence do X/Z
             let mut x = [BaseElement::ZERO; POINT_COORDINATE_WIDTH];
-            x.copy_from_slice(&state[0..POINT_COORDINATE_WIDTH]);
+            x.copy_from_slice(
+                &state[PROJECTIVE_POINT_WIDTH + 1
+                    ..PROJECTIVE_POINT_WIDTH + POINT_COORDINATE_WIDTH + 1],
+            );
             let mut z = [BaseElement::ZERO; POINT_COORDINATE_WIDTH];
-            z.copy_from_slice(&state[AFFINE_POINT_WIDTH..PROJECTIVE_POINT_WIDTH]);
-            state[0..POINT_COORDINATE_WIDTH]
+            z.copy_from_slice(
+                &state[PROJECTIVE_POINT_WIDTH + AFFINE_POINT_WIDTH + 1
+                    ..2 * PROJECTIVE_POINT_WIDTH + 1],
+            );
+            state[PROJECTIVE_POINT_WIDTH + 1..PROJECTIVE_POINT_WIDTH + POINT_COORDINATE_WIDTH + 1]
                 .copy_from_slice(&ecc::mul_fp6(&x, &ecc::invert_fp6(&z)));
         }
         _ => {}

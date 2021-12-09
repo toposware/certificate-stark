@@ -45,22 +45,44 @@ pub const B3: [BaseElement; POINT_COORDINATE_WIDTH] = [
 // ================================================================================================
 
 /// Apply a point doubling.
-pub fn apply_point_doubling(state: &mut [BaseElement]) {
-    compute_double(state);
+pub fn apply_point_doubling(state: &mut [BaseElement], index_in: usize, index_out: usize) {
+    let mut start_point = [BaseElement::ZERO; PROJECTIVE_POINT_WIDTH];
+    start_point.copy_from_slice(&state[index_in..index_in + PROJECTIVE_POINT_WIDTH]);
+    compute_double(&mut start_point);
+
+    state[index_out..index_out + PROJECTIVE_POINT_WIDTH].copy_from_slice(&start_point);
 }
 
 /// Apply a point addition between the current `state` registers with a given point.
-pub fn apply_point_addition(state: &mut [BaseElement], point: &[BaseElement]) {
+pub fn apply_point_addition(
+    state: &mut [BaseElement],
+    point: &[BaseElement],
+    index_in: usize,
+    index_out: usize,
+) {
+    let mut start_point = [BaseElement::ZERO; PROJECTIVE_POINT_WIDTH];
+    start_point.copy_from_slice(&state[index_in..index_in + PROJECTIVE_POINT_WIDTH]);
     if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
-        compute_add(state, point)
+        compute_add(&mut start_point, point)
     };
+
+    state[index_out..index_out + PROJECTIVE_POINT_WIDTH].copy_from_slice(&start_point);
 }
 
 /// Apply a point mixed addition between the current `state` registers with a given point.
-pub fn apply_point_addition_mixed(state: &mut [BaseElement], point: &[BaseElement]) {
-    if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
-        compute_add_mixed(state, point)
+pub fn apply_point_addition_mixed(
+    state: &mut [BaseElement],
+    point: &[BaseElement],
+    index_in: usize,
+    index_out: usize,
+) {
+    let mut start_point = [BaseElement::ZERO; PROJECTIVE_POINT_WIDTH];
+    start_point.copy_from_slice(&state[index_in..index_in + PROJECTIVE_POINT_WIDTH]);
+    if state[index_out + PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
+        compute_add_mixed(&mut start_point, point)
     };
+
+    state[index_out..index_out + PROJECTIVE_POINT_WIDTH].copy_from_slice(&start_point);
 }
 
 // CONSTRAINTS
@@ -89,6 +111,12 @@ pub fn enforce_point_doubling<E: FieldElement + From<BaseElement>>(
     // Enforce that the last register for conditional addition is indeed binary
     result.agg_constraint(
         PROJECTIVE_POINT_WIDTH,
+        flag,
+        is_binary(current[PROJECTIVE_POINT_WIDTH]),
+    );
+
+    result.agg_constraint(
+        2 * PROJECTIVE_POINT_WIDTH + 1,
         flag,
         is_binary(current[PROJECTIVE_POINT_WIDTH]),
     );
@@ -134,17 +162,55 @@ pub fn enforce_point_addition_mixed<E: FieldElement + From<BaseElement>>(
     );
 }
 
+/// When flag = 1, enforces constraints for performing a mixed point addition
+/// between current and point, on the same row.
+pub fn enforce_point_addition_mixed_same_row<E: FieldElement + From<BaseElement>>(
+    result: &mut [E],
+    current: &[E],
+    next: &[E],
+    point: &[E],
+    index_in: usize,
+    index_out: usize,
+    flag: E,
+) {
+    let mut step1 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step1.copy_from_slice(&next[index_in..index_in + PROJECTIVE_POINT_WIDTH]);
+
+    let mut step2 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
+    step2.copy_from_slice(&next[index_out..index_out + PROJECTIVE_POINT_WIDTH]);
+
+    compute_add_mixed(&mut step1, point);
+    let adding_bit = next[index_out + PROJECTIVE_POINT_WIDTH];
+
+    for i in 0..PROJECTIVE_POINT_WIDTH {
+        result.agg_constraint(
+            index_out + i,
+            flag,
+            are_equal(step2[i], adding_bit * step1[i] + not(adding_bit) * next[i]),
+        );
+    }
+
+    // Ensure proper duplication of the binary decomposition
+    result.agg_constraint(
+        index_out + PROJECTIVE_POINT_WIDTH,
+        flag,
+        are_equal(
+            current[index_out + PROJECTIVE_POINT_WIDTH],
+            next[index_out + PROJECTIVE_POINT_WIDTH],
+        ),
+    );
+}
+
 /// When flag = 1, enforces constraints for performing a point addition
 /// between current and point in projective coordinates.
 ///
 /// In the current implementation, this is being used only once, at the final step,
 /// so we add a division of register 0 by register 2 to obtain the final affine
 /// x coordinate (computations are being done internally in projective coordinates)
-pub fn enforce_point_addition_reduce_x<E: FieldElement + From<BaseElement>>(
+pub fn enforce_point_reduce_x<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
-    point: &[E],
     flag: E,
 ) {
     let mut step1 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
@@ -152,8 +218,6 @@ pub fn enforce_point_addition_reduce_x<E: FieldElement + From<BaseElement>>(
 
     let mut step2 = [E::ZERO; PROJECTIVE_POINT_WIDTH];
     step2.copy_from_slice(&next[0..PROJECTIVE_POINT_WIDTH]);
-
-    compute_add(&mut step1, point);
 
     let x_z = mul_fp6(
         &step2[0..POINT_COORDINATE_WIDTH],
