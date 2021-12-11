@@ -30,6 +30,7 @@ default = ["std"]
 std = ["winterfell/std"]
 
 [dev-dependencies]
+criterion = "0.3"
 env_logger = "0.9"
 gumdrop = "0.8"
 
@@ -37,3 +38,27 @@ gumdrop = "0.8"
 codegen-units = 1
 lto = true
 
+[profile.bench]
+codegen-units = 1
+lto = true
+
+
+[[bench]]
+name = "merkle"
+harness = false
+
+[[bench]]
+name = "range"
+harness = false
+
+[[bench]]
+name = "rescue"
+harness = false
+
+[[bench]]
+name = "schnorr"
+harness = false
+
+[[bench]]
+name = "state_transition"
+harness = false
