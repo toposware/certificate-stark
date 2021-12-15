@@ -6,10 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub use crate::merkle::constants::{
-    AFFINE_POINT_WIDTH, HASH_CYCLE_LENGTH, HASH_STATE_WIDTH, MERKLE_TREE_DEPTH,
-    RECEIVER_INITIAL_POS, RECEIVER_UPDATED_POS, SENDER_INITIAL_POS, SENDER_UPDATED_POS,
-    TRANSACTION_HASH_LENGTH,
+pub(crate) use crate::merkle::constants::{
+    AFFINE_POINT_WIDTH, HASH_CYCLE_LENGTH, HASH_STATE_WIDTH, RECEIVER_INITIAL_POS,
+    RECEIVER_UPDATED_POS, SENDER_INITIAL_POS, SENDER_UPDATED_POS,
 };
 
 // CONSTANTS

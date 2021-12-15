@@ -43,6 +43,9 @@ use winterfell::{
     TransitionConstraintDegree,
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 // MERKLE PATH VERIFICATION AIR
 // ================================================================================================
 

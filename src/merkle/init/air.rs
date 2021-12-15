@@ -16,6 +16,9 @@ use winterfell::{
     TransitionConstraintDegree,
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 // MERKLE PATH VERIFICATION AIR
 // ================================================================================================
 
@@ -149,11 +152,11 @@ impl Air for PreMerkleAir {
 // HELPER FUNCTIONS
 // ------------------------------------------------------------------------------------------------
 
-pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
+pub(crate) fn periodic_columns() -> Vec<Vec<BaseElement>> {
     rescue::get_round_constants()
 }
 
-pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -198,7 +201,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
 }
 
-pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
+pub(crate) fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
     let mut degrees = Vec::with_capacity(HASH_STATE_WIDTH * 4);
     for _ in 0..HASH_STATE_WIDTH * 4 {
         degrees.push(TransitionConstraintDegree::new(3));

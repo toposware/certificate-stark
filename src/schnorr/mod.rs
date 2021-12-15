@@ -7,18 +7,26 @@
 // except according to those terms.
 
 use bitvec::{order::Lsb0, view::AsBits};
-use log::debug;
 use rand_core::OsRng;
-use std::time::Instant;
 use winterfell::{
     crypto::Hasher,
     math::{
         curves::curve_f63::{AffinePoint, Scalar},
         fields::f63::BaseElement,
-        log2, FieldElement,
+        FieldElement,
     },
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
+#[cfg(feature = "std")]
+use log::debug;
+#[cfg(feature = "std")]
+use std::time::Instant;
+#[cfg(feature = "std")]
+use winterfell::math::log2;
 
 use super::utils::{
     ecc::{self, AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH},
@@ -26,14 +34,14 @@ use super::utils::{
     rescue::{self, Rescue63, RATE_WIDTH as HASH_RATE_WIDTH},
 };
 
-pub mod constants;
+pub(crate) mod constants;
 mod trace;
-pub use trace::{
+pub(crate) use trace::{
     build_sig_info, build_trace, init_sig_verification_state, update_sig_verification_state,
 };
 
 mod air;
-pub use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
+pub(crate) use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{PublicInputs, SchnorrAir};
 
 #[cfg(test)]
@@ -42,6 +50,7 @@ mod tests;
 // SCHNORR SIGNATURE EXAMPLE
 // ================================================================================================
 
+/// Outputs a new `SchnorrExample` with `num_signatures` signatures on random messages.
 pub fn get_example(num_signatures: usize) -> SchnorrExample {
     SchnorrExample::new(
         // TODO: make it customizable
@@ -58,6 +67,9 @@ pub fn get_example(num_signatures: usize) -> SchnorrExample {
     )
 }
 
+/// A struct to perform Schnorr signature valid
+/// verification proof among a set of signed messages.
+#[derive(Clone, Debug)]
 pub struct SchnorrExample {
     options: ProofOptions,
     messages: Vec<[BaseElement; AFFINE_POINT_WIDTH * 2 + 4]>,
@@ -65,6 +77,7 @@ pub struct SchnorrExample {
 }
 
 impl SchnorrExample {
+    /// Outputs a new `SchnorrExample` with `num_signatures` signatures on random messages.
     pub fn new(options: ProofOptions, num_signatures: usize) -> SchnorrExample {
         let mut rng = OsRng;
         let mut skeys = Vec::with_capacity(num_signatures);
@@ -87,12 +100,14 @@ impl SchnorrExample {
         }
 
         // compute the Schnorr signatures
+        #[cfg(feature = "std")]
         let now = Instant::now();
 
         for i in 0..num_signatures {
             signatures.push(sign(messages[i], skeys[i]));
         }
 
+        #[cfg(feature = "std")]
         debug!(
             "Computed {} Schnorr signatures in {} ms",
             num_signatures,
@@ -100,12 +115,14 @@ impl SchnorrExample {
         );
 
         // verify the Schnorr signatures
+        #[cfg(feature = "std")]
         let now = Instant::now();
 
         for i in 0..num_signatures {
             assert!(verify_signature(messages[i], signatures[i]));
         }
 
+        #[cfg(feature = "std")]
         debug!(
             "Verified {} Schnorr signatures in {} ms",
             num_signatures,
@@ -119,20 +136,23 @@ impl SchnorrExample {
         }
     }
 
+    /// Proves the validity of a sequence of Schnorr signatures
     pub fn prove(&self) -> StarkProof {
         // generate the execution trace
+        #[cfg(feature = "std")]
         debug!(
             "Generating proof for verifying {} Schnorr signatures\n\
             ---------------------",
             self.messages.len(),
         );
+        #[cfg(feature = "std")]
         let now = Instant::now();
         let trace = build_trace(&self.messages, &self.signatures);
-        let trace_length = trace.length();
+        #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
             trace.width(),
-            log2(trace_length),
+            log2(trace.length()),
             now.elapsed().as_millis()
         );
 
@@ -144,6 +164,7 @@ impl SchnorrExample {
         winterfell::prove::<SchnorrAir>(trace, pub_inputs, self.options.clone()).unwrap()
     }
 
+    /// Verifies the validity of a proof of correct Schnorr signature verification
     pub fn verify(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             messages: self.messages.clone(),
@@ -152,7 +173,8 @@ impl SchnorrExample {
         winterfell::verify::<SchnorrAir>(proof, pub_inputs)
     }
 
-    pub fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
+    #[cfg(test)]
+    fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             messages: vec![self.messages[0]; self.signatures.len()],
             signatures: self.signatures.clone(),
@@ -165,7 +187,7 @@ impl SchnorrExample {
 // ================================================================================================
 
 /// Computes a Schnorr signature
-pub fn sign(
+pub(crate) fn sign(
     message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
     skey: Scalar,
 ) -> ([BaseElement; POINT_COORDINATE_WIDTH], Scalar) {
@@ -188,7 +210,7 @@ pub fn sign(
 }
 
 /// Verifies a Schnorr signature
-pub fn verify_signature(
+pub(crate) fn verify_signature(
     message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
     signature: ([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
 ) -> bool {

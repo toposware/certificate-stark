@@ -14,12 +14,16 @@ use winterfell::{
     ByteReader, ByteWriter, Deserializable, DeserializationError, Serializable,
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 // CONSTANTS
 // ================================================================================================
 
 /// Function state is set to 14 field elements or 112 bytes; 7 elements are reserved for rate
 /// and 7 elements are reserved for capacity.
 pub const STATE_WIDTH: usize = 14;
+/// The rate of the Rescue hash.
 pub const RATE_WIDTH: usize = 7;
 
 /// Seven elements (56-bytes) are returned as digest.
@@ -47,12 +51,15 @@ pub const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LENGTH] = [
 // TYPES AND INTERFACES
 // ================================================================================================
 
+/// Implementation of Rescue-Prime over F63
+#[derive(Clone, Debug)]
 pub struct Rescue63 {
     state: [BaseElement; STATE_WIDTH],
     idx: usize,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+/// A hash object
 pub struct Hash([BaseElement; DIGEST_SIZE]);
 
 // Rescue63 IMPLEMENTATION
@@ -153,6 +160,7 @@ impl Hasher for Rescue63 {
 // ================================================================================================
 
 impl Hash {
+    /// Instantiates a new hasher state
     pub fn new(
         v1: BaseElement,
         v2: BaseElement,
@@ -167,6 +175,7 @@ impl Hash {
 
     #[allow(dead_code)]
     #[allow(clippy::wrong_self_convention)]
+    /// Encodes the current hash state to bytes
     pub fn to_bytes(&self) -> [u8; 112] {
         let mut bytes = [0; 112];
         for i in 0..STATE_WIDTH {
@@ -177,10 +186,12 @@ impl Hash {
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Outputs the current hash state
     pub fn to_elements(&self) -> [BaseElement; DIGEST_SIZE] {
         self.0
     }
 
+    /// Converts a list of `Hash` to a list of `BaseElement`
     pub fn hashes_as_elements(hashes: &[Hash]) -> &[BaseElement] {
         let p = hashes.as_ptr();
         let len = hashes.len() * DIGEST_SIZE;
@@ -769,6 +780,7 @@ const INV_MDS: [BaseElement; STATE_WIDTH * STATE_WIDTH] = [
     BaseElement::new(0x17d25fc681655ebe),
 ];
 
+/// The additive round constants (ARK)
 pub const ARK: [[BaseElement; STATE_WIDTH * 2]; HASH_CYCLE_LENGTH] = [
     [
         BaseElement::new(0x1f0a24c4ed42b7df),

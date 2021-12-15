@@ -6,29 +6,34 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use log::debug;
-use std::time::Instant;
 use winterfell::{
-    math::{fields::f63::BaseElement, log2, FieldElement},
+    math::{fields::f63::BaseElement, FieldElement},
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
 
+#[cfg(feature = "std")]
+use log::debug;
+#[cfg(feature = "std")]
+use std::time::Instant;
+#[cfg(feature = "std")]
+use winterfell::math::log2;
+
 mod air;
-pub use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
+pub(crate) use air::{evaluate_constraints, periodic_columns};
 use air::{PreMerkleAir, PublicInputs};
 
-pub mod constants;
+pub(crate) mod constants;
 use constants::AFFINE_POINT_WIDTH;
 mod trace;
-pub use trace::{
-    build_trace, init_merkle_initialization_state, update_merkle_initialization_state,
-};
+pub(crate) use trace::build_trace;
 
 #[cfg(test)]
 mod tests;
 
 // MERKLE TREE UPDATE EXAMPLE
 // ================================================================================================
+
+/// Outputs a new `PreMerkleExample` for proving correct hashing of leaf values
 pub fn get_example() -> PreMerkleExample {
     PreMerkleExample::new(
         // TODO: make it customizable
@@ -44,6 +49,9 @@ pub fn get_example() -> PreMerkleExample {
     )
 }
 
+/// A struct to perform leaf hash validity
+/// proof among a set of transactions.
+#[derive(Clone, Debug)]
 pub struct PreMerkleExample {
     options: ProofOptions,
     s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
@@ -52,8 +60,10 @@ pub struct PreMerkleExample {
 }
 
 impl PreMerkleExample {
+    /// Outputs a new `PreMerkleExample` for proving correct hashing of leaf values
     pub fn new(options: ProofOptions) -> PreMerkleExample {
-        // Sender and receiver inputs are 4 BaseElement s, namely: 2 for the pk, 1 for the $, and 1 for the nonce
+        // Sender and receiver inputs are AFFINE_POINT_WIDTH + 2 `BaseElement`,
+        // namely: AFFINE_POINT_WIDTH for the pk, 1 for the amount, and 1 for the nonce
         let s_inputs = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
         let r_inputs = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
         let delta = BaseElement::ONE;
@@ -65,19 +75,23 @@ impl PreMerkleExample {
             delta,
         }
     }
+
+    /// Proves the validity of a Rescue-Prime hash iteration over some leaf inputs
     pub fn prove(&self) -> StarkProof {
         // generate the execution trace
+        #[cfg(feature = "std")]
         debug!(
             "Generating proof for Pre-Merkle block\n\
             ---------------------"
         );
+        #[cfg(feature = "std")]
         let now = Instant::now();
         let trace = build_trace(self.s_inputs, self.r_inputs, self.delta);
-        let trace_length = trace.length();
+        #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
             trace.width(),
-            log2(trace_length),
+            log2(trace.length()),
             now.elapsed().as_millis()
         );
 
@@ -90,6 +104,7 @@ impl PreMerkleExample {
         winterfell::prove::<PreMerkleAir>(trace, pub_inputs, self.options.clone()).unwrap()
     }
 
+    /// Verifies the validity of a proof of correct Rescue-Prime hash iteration
     pub fn verify(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             s_inputs: self.s_inputs,
@@ -99,7 +114,8 @@ impl PreMerkleExample {
         winterfell::verify::<PreMerkleAir>(proof, pub_inputs)
     }
 
-    pub fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
+    #[cfg(test)]
+    fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             s_inputs: self.r_inputs,
             r_inputs: self.r_inputs,

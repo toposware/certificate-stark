@@ -8,7 +8,10 @@
 
 use winterfell::math::fields::f63::BaseElement;
 
-pub fn stitch(
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
+pub(crate) fn stitch(
     original_columns: &mut Vec<Vec<BaseElement>>,
     additional_columns: Vec<Vec<BaseElement>>,
     index_map: Vec<(usize, usize)>,
@@ -31,7 +34,7 @@ pub fn stitch(
     }
 }
 
-pub fn fill(
+pub(crate) fn fill(
     original_columns: &mut Vec<Vec<BaseElement>>,
     additional_columns: Vec<Vec<BaseElement>>,
     index_map: Vec<(usize, usize)>,
@@ -59,7 +62,7 @@ pub fn fill(
     }
 }
 
-pub fn pad(
+pub(crate) fn pad(
     original_columns: &mut Vec<Vec<BaseElement>>,
     indices: Vec<usize>,
     length: usize,

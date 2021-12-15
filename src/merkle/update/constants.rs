@@ -9,7 +9,7 @@
 // CONSTANTS
 // ================================================================================================
 
-pub use crate::merkle::constants::{
+pub(crate) use crate::merkle::constants::{
     AFFINE_POINT_WIDTH, BALANCE_CONSTRAINT_RES, HASH_CYCLE_LENGTH, HASH_RATE_WIDTH,
     HASH_STATE_WIDTH, INT_ROOT_EQUALITY_RES, MERKLE_TREE_DEPTH, NONCE_UPDATE_CONSTRAINT_RES,
     NUM_HASH_ROUNDS, PREV_TREE_MATCH_RES, PREV_TREE_ROOT_POS, PREV_TREE_ROOT_RES, RECEIVER_BIT_POS,

@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod constants;
+pub(crate) mod constants;
+/// The Merkle initialization module for hashing at the leaf level
 pub mod init;
+/// The Merkle update module for computing authentication paths
 pub mod update;

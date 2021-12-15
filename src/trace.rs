@@ -21,6 +21,9 @@ use winterfell::{
 #[cfg(feature = "concurrent")]
 use winterfell::iterators::*;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 use merkle_const::TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH;
 use schnorr_const::{
     AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH, SIG_CYCLE_LENGTH as SCHNORR_LENGTH,

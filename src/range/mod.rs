@@ -6,30 +6,33 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use log::debug;
-use std::time::Instant;
 use winterfell::{
-    math::{fields::f63::BaseElement, log2},
-    FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
+    math::fields::f63::BaseElement, FieldExtension, HashFunction, ProofOptions, StarkProof,
+    VerifierError,
 };
+
+#[cfg(feature = "std")]
+use log::debug;
+#[cfg(feature = "std")]
+use std::time::Instant;
+#[cfg(feature = "std")]
+use winterfell::math::log2;
 
 use super::utils::field;
 
 mod air;
-pub use air::{
-    build_trace, evaluate_constraints, init_range_verification_state,
-    transition_constraint_degrees, update_range_verification_state, TRACE_WIDTH,
-};
+pub(crate) use air::{build_trace, init_range_verification_state, update_range_verification_state};
 use air::{PublicInputs, RangeProofAir};
 
 #[cfg(test)]
 mod tests;
 
-pub const RANGE_LOG: usize = 64;
+pub(crate) const RANGE_LOG: usize = 64;
 
 // RANGE PROOF EXAMPLE
 // ================================================================================================
 
+/// Outputs a new `RangeProofExample` of a given number
 pub fn get_example(number: BaseElement) -> RangeProofExample {
     RangeProofExample::new(
         // TODO: make it customizable
@@ -46,6 +49,8 @@ pub fn get_example(number: BaseElement) -> RangeProofExample {
     )
 }
 
+/// A struct to perform proofs of valid range of a number
+#[derive(Clone, Debug)]
 pub struct RangeProofExample {
     options: ProofOptions,
     number: BaseElement,
@@ -53,6 +58,7 @@ pub struct RangeProofExample {
 }
 
 impl RangeProofExample {
+    /// Outputs a new `RangeProofExample` of a given number
     pub fn new(options: ProofOptions, number: BaseElement) -> RangeProofExample {
         RangeProofExample {
             options,
@@ -60,20 +66,24 @@ impl RangeProofExample {
             range_log: RANGE_LOG,
         }
     }
+
+    /// Proves that a number is in a valid range
     pub fn prove(&self) -> StarkProof {
         // generate the execution trace
+        #[cfg(feature = "std")]
         debug!(
             "Generating a Range proof for number of {} bits\n\
             ---------------------",
             self.range_log,
         );
+        #[cfg(feature = "std")]
         let now = Instant::now();
         let trace = build_trace(self.number, self.range_log);
-        let trace_length = trace.length();
+        #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
             trace.width(),
-            log2(trace_length),
+            log2(trace.length()),
             now.elapsed().as_millis()
         );
 
@@ -84,6 +94,7 @@ impl RangeProofExample {
         winterfell::prove::<RangeProofAir>(trace, pub_inputs, self.options.clone()).unwrap()
     }
 
+    /// Verifies the validity of a proof of correct range of a given number
     pub fn verify(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             number: self.number,
@@ -91,7 +102,8 @@ impl RangeProofExample {
         winterfell::verify::<RangeProofAir>(proof, pub_inputs)
     }
 
-    pub fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
+    #[cfg(test)]
+    fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             number: -self.number,
         };

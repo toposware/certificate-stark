@@ -8,9 +8,17 @@
 
 use winterfell::math::FieldElement;
 
-pub mod ecc;
-pub mod field;
-pub mod periodic_columns;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
+/// An elliptic curve group operation utility module
+pub(crate) mod ecc;
+/// A field operation utility module
+pub(crate) mod field;
+/// A periodic values utility module
+pub(crate) mod periodic_columns;
+/// The Rescue-Prime utility module
+// Public for benchmarking purposes
 pub mod rescue;
 
 // CONSTRAINT EVALUATION HELPERS
@@ -40,7 +48,10 @@ pub fn not<E: FieldElement>(a: E) -> E {
 // TRAIT TO SIMPLIFY CONSTRAINT AGGREGATION
 // ================================================================================================
 
+/// A trait to simplify constraint aggregation
 pub trait EvaluationResult<E> {
+    /// Aggregates constraint value to self, at the given index with
+    /// the given constraint flag.
     fn agg_constraint(&mut self, index: usize, flag: E, value: E);
 }
 

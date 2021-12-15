@@ -17,6 +17,9 @@ use winterfell::{
     TransitionConstraintDegree,
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 // SCHNORR AIR
 // ================================================================================================
 
@@ -329,7 +332,7 @@ fn enforce_hash_copy<E: FieldElement>(
 // HELPER FUNCTIONS
 // ------------------------------------------------------------------------------------------------
 
-pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
+pub(crate) fn periodic_columns() -> Vec<Vec<BaseElement>> {
     // We are computing the values for one whole Schnorr trace, i.e.
     // having only 1 global period of length SIG_CYCLE_LENGTH.
 
@@ -388,7 +391,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -527,7 +530,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     }
 }
 
-pub fn transition_constraint_degrees(
+pub(crate) fn transition_constraint_degrees(
     num_tx: usize,
     cycle_length: usize,
 ) -> Vec<TransitionConstraintDegree> {

@@ -21,7 +21,7 @@ use winterfell::iterators::*;
 // TRACE GENERATOR
 // ================================================================================================
 
-pub fn build_trace(
+pub(crate) fn build_trace(
     messages: &[[BaseElement; AFFINE_POINT_WIDTH * 2 + 4]],
     signatures: &[([BaseElement; POINT_COORDINATE_WIDTH], Scalar)],
 ) -> ExecutionTrace<BaseElement> {
@@ -51,7 +51,7 @@ pub fn build_trace(
 // TRACE INITIALIZATION
 // ================================================================================================
 
-pub fn init_sig_verification_state(
+pub(crate) fn init_sig_verification_state(
     signature: ([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
     state: &mut [BaseElement],
 ) {
@@ -68,7 +68,7 @@ pub fn init_sig_verification_state(
 // TRANSITION FUNCTION
 // ================================================================================================
 
-pub fn update_sig_verification_state(
+pub(crate) fn update_sig_verification_state(
     step: usize,
     message: [BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
     pkey_point: [BaseElement; AFFINE_POINT_WIDTH],
@@ -160,7 +160,7 @@ pub fn update_sig_verification_state(
 // HELPER FUNCTIONS
 // ================================================================================================
 
-pub fn build_sig_info(
+pub(crate) fn build_sig_info(
     message: &[BaseElement; AFFINE_POINT_WIDTH * 2 + 4],
     signature: &([BaseElement; POINT_COORDINATE_WIDTH], Scalar),
 ) -> ([BaseElement; AFFINE_POINT_WIDTH], [u8; 32], [u8; 32]) {
