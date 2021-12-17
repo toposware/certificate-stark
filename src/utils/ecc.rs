@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::{are_equal, is_binary, not, EvaluationResult};
 use winterfell::math::{fields::f63::BaseElement, FieldElement};
@@ -45,19 +48,19 @@ pub const B3: [BaseElement; POINT_COORDINATE_WIDTH] = [
 // ================================================================================================
 
 /// Apply a point doubling.
-pub fn apply_point_doubling(state: &mut [BaseElement]) {
+pub(crate) fn apply_point_doubling(state: &mut [BaseElement]) {
     compute_double(state);
 }
 
 /// Apply a point addition between the current `state` registers with a given point.
-pub fn apply_point_addition(state: &mut [BaseElement], point: &[BaseElement]) {
+pub(crate) fn apply_point_addition(state: &mut [BaseElement], point: &[BaseElement]) {
     if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
         compute_add(state, point)
     };
 }
 
 /// Apply a point mixed addition between the current `state` registers with a given point.
-pub fn apply_point_addition_mixed(state: &mut [BaseElement], point: &[BaseElement]) {
+pub(crate) fn apply_point_addition_mixed(state: &mut [BaseElement], point: &[BaseElement]) {
     if state[PROJECTIVE_POINT_WIDTH] == BaseElement::ONE {
         compute_add_mixed(state, point)
     };
@@ -67,7 +70,7 @@ pub fn apply_point_addition_mixed(state: &mut [BaseElement], point: &[BaseElemen
 // ================================================================================================
 
 /// When flag = 1, enforces constraints for performing a point doubling.
-pub fn enforce_point_doubling<E: FieldElement + From<BaseElement>>(
+pub(crate) fn enforce_point_doubling<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -96,7 +99,7 @@ pub fn enforce_point_doubling<E: FieldElement + From<BaseElement>>(
 
 /// When flag = 1, enforces constraints for performing a mixed point addition
 /// between current and point.
-pub fn enforce_point_addition_mixed<E: FieldElement + From<BaseElement>>(
+pub(crate) fn enforce_point_addition_mixed<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -140,7 +143,7 @@ pub fn enforce_point_addition_mixed<E: FieldElement + From<BaseElement>>(
 /// In the current implementation, this is being used only once, at the final step,
 /// so we add a division of register 0 by register 2 to obtain the final affine
 /// x coordinate (computations are being done internally in projective coordinates)
-pub fn enforce_point_addition_reduce_x<E: FieldElement + From<BaseElement>>(
+pub(crate) fn enforce_point_addition_reduce_x<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -401,7 +404,7 @@ fn compute_add_mixed<E: FieldElement + From<BaseElement>>(state: &mut [E], point
 }
 
 #[inline(always)]
-pub fn square_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+pub(crate) fn square_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
     let self_c0 = a[0];
     let self_c1 = a[1];
 
@@ -421,7 +424,7 @@ pub fn square_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
 }
 
 #[inline(always)]
-pub fn mul_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
+pub(crate) fn mul_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
     let self_c0 = a[0];
     let self_c1 = a[1];
 
@@ -445,34 +448,36 @@ pub fn mul_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] 
 }
 
 #[inline(always)]
-pub fn invert_fp2(a: &[BaseElement]) -> [BaseElement; 2] {
+pub(crate) fn invert_fp2(a: &[BaseElement]) -> [BaseElement; 2] {
     let t = (a[0].square() + a[0].double() * a[1] - a[1].square().double()).inv();
 
     [(a[0] + a[1].double()) * t, -a[1] * t]
 }
 
 #[inline(always)]
-pub fn add_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
+pub(crate) fn add_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
     [a[0].add(b[0]), a[1].add(b[1])]
 }
 
 #[inline(always)]
-pub fn double_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+pub(crate) fn double_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
     [a[0].double(), a[1].double()]
 }
 
 #[inline(always)]
-pub fn sub_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
+pub(crate) fn sub_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
     [a[0].sub(b[0]), a[1].sub(b[1])]
 }
 
 #[inline(always)]
-pub fn neg_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
+pub(crate) fn neg_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
     [a[0].neg(), a[1].neg()]
 }
 
 #[inline(always)]
-pub fn square_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+pub(crate) fn square_fp6<E: FieldElement + From<BaseElement>>(
+    a: &[E],
+) -> [E; POINT_COORDINATE_WIDTH] {
     let self_c0 = &a[0..2];
     let self_c1 = &a[2..4];
     let self_c2 = &a[4..POINT_COORDINATE_WIDTH];
@@ -507,7 +512,7 @@ pub fn square_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COO
 }
 
 #[inline(always)]
-pub fn mul_fp6<E: FieldElement + From<BaseElement>>(
+pub(crate) fn mul_fp6<E: FieldElement + From<BaseElement>>(
     a: &[E],
     b: &[E],
 ) -> [E; POINT_COORDINATE_WIDTH] {
@@ -552,7 +557,7 @@ pub fn mul_fp6<E: FieldElement + From<BaseElement>>(
 }
 
 #[inline(always)]
-pub fn invert_fp6(a: &[BaseElement]) -> [BaseElement; POINT_COORDINATE_WIDTH] {
+pub(crate) fn invert_fp6(a: &[BaseElement]) -> [BaseElement; POINT_COORDINATE_WIDTH] {
     let self_c0 = &a[0..2];
     let self_c1 = &a[2..4];
     let self_c2 = &a[4..POINT_COORDINATE_WIDTH];
@@ -595,7 +600,7 @@ pub fn invert_fp6(a: &[BaseElement]) -> [BaseElement; POINT_COORDINATE_WIDTH] {
 }
 
 #[inline(always)]
-pub fn add_fp6<E: FieldElement + From<BaseElement>>(
+pub(crate) fn add_fp6<E: FieldElement + From<BaseElement>>(
     a: &[E],
     b: &[E],
 ) -> [E; POINT_COORDINATE_WIDTH] {
@@ -610,7 +615,9 @@ pub fn add_fp6<E: FieldElement + From<BaseElement>>(
 }
 
 #[inline(always)]
-pub fn double_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+pub(crate) fn double_fp6<E: FieldElement + From<BaseElement>>(
+    a: &[E],
+) -> [E; POINT_COORDINATE_WIDTH] {
     [
         a[0].double(),
         a[1].double(),
@@ -622,7 +629,7 @@ pub fn double_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COO
 }
 
 #[inline(always)]
-pub fn sub_fp6<E: FieldElement + From<BaseElement>>(
+pub(crate) fn sub_fp6<E: FieldElement + From<BaseElement>>(
     a: &[E],
     b: &[E],
 ) -> [E; POINT_COORDINATE_WIDTH] {
@@ -638,7 +645,7 @@ pub fn sub_fp6<E: FieldElement + From<BaseElement>>(
 
 #[inline(always)]
 #[allow(unused)]
-pub fn neg_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
+pub(crate) fn neg_fp6<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; POINT_COORDINATE_WIDTH] {
     [
         a[0].neg(),
         a[1].neg(),

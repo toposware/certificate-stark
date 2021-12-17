@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::field;
 use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
@@ -10,6 +13,9 @@ use winterfell::{
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ExecutionTrace, ProofOptions,
     Serializable, TraceInfo, TransitionConstraintDegree,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 // CONSTANTS
 // ================================================================================================
@@ -83,7 +89,7 @@ impl Air for RangeProofAir {
 // HELPER EVALUATORS
 // ------------------------------------------------------------------------------------------------
 
-pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -92,7 +98,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     field::enforce_double_and_add_step(result, current, next, 1, 0, FieldElement::ONE);
 }
 
-pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
+pub(crate) fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
     vec![
         TransitionConstraintDegree::new(2),
         TransitionConstraintDegree::new(1),
@@ -102,7 +108,7 @@ pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
 // TRACE BUILDER
 // ------------------------------------------------------------------------------------------------
 
-pub fn build_trace(number: BaseElement, range_log: usize) -> ExecutionTrace<BaseElement> {
+pub(crate) fn build_trace(number: BaseElement, range_log: usize) -> ExecutionTrace<BaseElement> {
     // allocate memory to hold the trace table
     let trace_length = range_log;
     let mut trace = ExecutionTrace::new(TRACE_WIDTH, trace_length);
@@ -126,7 +132,7 @@ pub fn build_trace(number: BaseElement, range_log: usize) -> ExecutionTrace<Base
 // TRACE INITIALIZATION
 // ================================================================================================
 
-pub fn init_range_verification_state(state: &mut [BaseElement]) {
+pub(crate) fn init_range_verification_state(state: &mut [BaseElement]) {
     // initialize first state of the computation
     state[0] = BaseElement::ZERO; // bit
     state[1] = BaseElement::ZERO; // accumulated value
@@ -135,7 +141,7 @@ pub fn init_range_verification_state(state: &mut [BaseElement]) {
 // TRACE TRANSITION FUNCTION
 // ================================================================================================
 
-pub fn update_range_verification_state(
+pub(crate) fn update_range_verification_state(
     step: usize,
     range_log: usize,
     bits: &BitSlice<Lsb0, u8>,

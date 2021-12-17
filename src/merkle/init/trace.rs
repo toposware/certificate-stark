@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::constants::*;
 use winterfell::{
@@ -14,7 +17,7 @@ use crate::utils::rescue;
 // TRACE BUILDER
 // ------------------------------------------------------------------------------------------------
 
-pub fn build_trace(
+pub(crate) fn build_trace(
     s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     delta: BaseElement,
@@ -39,7 +42,7 @@ pub fn build_trace(
 // TRACE INITIALIZATION
 // ================================================================================================
 
-pub fn init_merkle_initialization_state(
+pub(crate) fn init_merkle_initialization_state(
     state: &mut [BaseElement],
     s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
     r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
@@ -79,7 +82,7 @@ pub fn init_merkle_initialization_state(
 // TRACE TRANSITION FUNCTION
 // ================================================================================================
 
-pub fn update_merkle_initialization_state(step: usize, state: &mut [BaseElement]) {
+pub(crate) fn update_merkle_initialization_state(step: usize, state: &mut [BaseElement]) {
     // Evaluate H(pk||coins||nonce)
     rescue::apply_round(
         &mut state[SENDER_INITIAL_POS..SENDER_INITIAL_POS + HASH_STATE_WIDTH],

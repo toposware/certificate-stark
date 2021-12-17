@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::{are_equal, is_binary, EvaluationResult};
 use winterfell::math::{fields::f63::BaseElement, FieldElement};
@@ -10,7 +13,7 @@ use winterfell::math::{fields::f63::BaseElement, FieldElement};
 // ================================================================================================
 
 /// Apply a step of double-and-add in the field when filling up the execution trace.
-pub fn apply_double_and_add_step(
+pub(crate) fn apply_double_and_add_step(
     state: &mut [BaseElement],
     value_position: usize,
     bit_position: usize,
@@ -25,7 +28,7 @@ pub fn apply_double_and_add_step(
 ///  - an accumulated value, starting from zero
 ///  - a binary value, indicating whether we add after doubling or not
 /// and enforce binary constraint on the bit decomposition register
-pub fn enforce_double_and_add_step<E: FieldElement>(
+pub(crate) fn enforce_double_and_add_step<E: FieldElement>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -48,7 +51,7 @@ pub fn enforce_double_and_add_step<E: FieldElement>(
 
 /// Enforce a step of double-and-add in the field, with an
 /// already constrained binary input.
-pub fn enforce_double_and_add_step_constrained<E: FieldElement>(
+pub(crate) fn enforce_double_and_add_step_constrained<E: FieldElement>(
     result: &mut [E],
     current: &[E],
     next: &[E],

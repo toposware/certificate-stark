@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use crate::utils::rescue;
 
@@ -12,6 +15,9 @@ use winterfell::{
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 // MERKLE PATH VERIFICATION AIR
 // ================================================================================================
@@ -146,11 +152,11 @@ impl Air for PreMerkleAir {
 // HELPER FUNCTIONS
 // ------------------------------------------------------------------------------------------------
 
-pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
+pub(crate) fn periodic_columns() -> Vec<Vec<BaseElement>> {
     rescue::get_round_constants()
 }
 
-pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -195,7 +201,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     );
 }
 
-pub fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
+pub(crate) fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree> {
     let mut degrees = Vec::with_capacity(HASH_STATE_WIDTH * 4);
     for _ in 0..HASH_STATE_WIDTH * 4 {
         degrees.push(TransitionConstraintDegree::new(3));

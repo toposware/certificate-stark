@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::super::utils::periodic_columns::stitch;
 use super::constants::*;
@@ -13,6 +16,9 @@ use winterfell::{
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 // SCHNORR AIR
 // ================================================================================================
@@ -326,7 +332,7 @@ fn enforce_hash_copy<E: FieldElement>(
 // HELPER FUNCTIONS
 // ------------------------------------------------------------------------------------------------
 
-pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
+pub(crate) fn periodic_columns() -> Vec<Vec<BaseElement>> {
     // We are computing the values for one whole Schnorr trace, i.e.
     // having only 1 global period of length SIG_CYCLE_LENGTH.
 
@@ -385,7 +391,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -524,7 +530,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     }
 }
 
-pub fn transition_constraint_degrees(
+pub(crate) fn transition_constraint_degrees(
     num_tx: usize,
     cycle_length: usize,
 ) -> Vec<TransitionConstraintDegree> {

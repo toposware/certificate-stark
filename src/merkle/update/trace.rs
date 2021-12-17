@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::constants::*;
 use crate::utils::rescue::{self, RATE_WIDTH};
@@ -14,11 +17,14 @@ use winterfell::{
 #[cfg(feature = "concurrent")]
 use winterfell::iterators::*;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 // TRACE GENERATOR
 // ================================================================================================
 
 #[allow(clippy::too_many_arguments)]
-pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
+pub(crate) fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
     let initial_roots = &tx_metadata.initial_roots;
     let s_old_values = &tx_metadata.s_old_values;
     let r_old_values = &tx_metadata.r_old_values;
@@ -75,7 +81,7 @@ pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElem
 // TRACE INITIALIZATION
 // ================================================================================================
 
-pub fn init_merkle_update_state(
+pub(crate) fn init_merkle_update_state(
     initial_root: rescue::Hash,
     s_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
     r_old_value: [BaseElement; AFFINE_POINT_WIDTH + 2],
@@ -109,7 +115,7 @@ pub fn init_merkle_update_state(
 // TRANSITION FUNCTION
 // ================================================================================================
 
-pub fn update_merkle_update_state(
+pub(crate) fn update_merkle_update_state(
     step: usize,
     s_index: usize,
     r_index: usize,
@@ -152,7 +158,7 @@ pub fn update_merkle_update_state(
     }
 }
 
-pub fn update_merkle_update_auth_state(
+pub(crate) fn update_merkle_update_auth_state(
     transaction_pos: usize,
     index: usize,
     branch: Vec<rescue::Hash>,

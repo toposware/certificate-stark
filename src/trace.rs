@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::constants::*;
 use super::merkle;
@@ -17,6 +20,9 @@ use winterfell::{
 
 #[cfg(feature = "concurrent")]
 use winterfell::iterators::*;
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 use merkle_const::TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH;
 use schnorr_const::{

@@ -1,3 +1,11 @@
+// Copyright (c) Toposware, Inc. 2021
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use log::debug;
 use std::time::{Duration, Instant};
@@ -9,7 +17,7 @@ use winterfell::{
     VerifierError,
 };
 
-use certificate_stark::constants::rescue_const::*;
+use certificate_stark::utils::rescue::{HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS, RATE_WIDTH};
 use certificate_stark::utils::{are_equal, is_zero, not, rescue, EvaluationResult};
 
 const SIZES: [usize; 4] = [128, 256, 512, 1024];
@@ -22,7 +30,7 @@ pub struct RescueExample {
 }
 
 impl RescueExample {
-    pub fn new(chain_length: usize, options: ProofOptions) -> RescueExample {
+    fn new(chain_length: usize, options: ProofOptions) -> RescueExample {
         assert!(
             chain_length.is_power_of_two(),
             "chain length must a power of 2"
@@ -263,10 +271,7 @@ fn enforce_hash_copy<E: FieldElement>(result: &mut [E], current: &[E], next: &[E
 // RESCUE TRACE GENERATOR
 // ================================================================================================
 
-pub fn build_trace(
-    seed: [BaseElement; RATE_WIDTH],
-    iterations: usize,
-) -> ExecutionTrace<BaseElement> {
+fn build_trace(seed: [BaseElement; RATE_WIDTH], iterations: usize) -> ExecutionTrace<BaseElement> {
     // allocate memory to hold the trace table
     let trace_length = iterations * HASH_CYCLE_LENGTH;
     let mut trace = ExecutionTrace::new(TRACE_WIDTH, trace_length);

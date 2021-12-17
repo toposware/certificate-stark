@@ -1,35 +1,63 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
+//! This crate provides an implementation of the Topos
+//! state-transition AIR program.
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![deny(broken_intra_doc_links)]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+/// The Merkle sub-AIR programs
 pub mod merkle;
+/// The range proof sub-AIR program
 pub mod range;
+/// The Schnorr signature sub-AIR program
 pub mod schnorr;
+/// Utility module
 pub mod utils;
-use utils::rescue::{Rescue63, RATE_WIDTH};
+use utils::rescue::Rescue63;
 
 mod air;
 use air::{PublicInputs, TransactionAir};
 
-pub mod constants;
+mod constants;
 
 mod trace;
 pub use trace::build_trace;
 
 use log::debug;
 use rand_core::{OsRng, RngCore};
-use std::time::Instant;
 use utils::rescue::Hash;
 use winterfell::{
-    crypto::{Digest, Hasher, MerkleTree},
+    crypto::{Hasher, MerkleTree},
     math::{
         curves::curve_f63::{AffinePoint, Scalar},
         fields::f63::BaseElement,
-        log2, FieldElement, StarkField,
+        FieldElement, StarkField,
     },
     FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
+#[cfg(feature = "std")]
+use std::time::Instant;
+#[cfg(feature = "std")]
+use winterfell::{crypto::Digest, math::log2};
 
 use constants::merkle_const::MERKLE_TREE_DEPTH;
 use constants::schnorr_const::{AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH};
@@ -37,8 +65,10 @@ use constants::schnorr_const::{AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH};
 #[cfg(test)]
 mod tests;
 
-// MERKLE TREE MULTIPLE TRANSACTIONS EXAMPLE
+// STATE-TRANSITION MULTIPLE TRANSACTIONS EXAMPLE
 // ================================================================================================
+
+/// Outputs a new `TransactionExample` with `num_transactions` random transactions.
 pub fn get_example(num_transactions: usize) -> TransactionExample {
     TransactionExample::new(
         // TODO: make it customizable
@@ -55,12 +85,16 @@ pub fn get_example(num_transactions: usize) -> TransactionExample {
     )
 }
 
+/// A struct to perform state-transition validity
+/// proof among a set of transactions.
+#[derive(Clone, Debug)]
 pub struct TransactionExample {
     options: ProofOptions,
     tx_metadata: TransactionMetadata,
 }
 
 impl TransactionExample {
+    /// Outputs a new `TransactionExample` with `num_transactions` random transactions.
     pub fn new(options: ProofOptions, num_transactions: usize) -> TransactionExample {
         assert!(
             (MERKLE_TREE_DEPTH + 1).is_power_of_two(),
@@ -74,21 +108,25 @@ impl TransactionExample {
             tx_metadata,
         }
     }
+
+    /// Proves the state-transition of a set of transactions
     pub fn prove(&self) -> StarkProof {
         // generate the execution trace
+        #[cfg(feature = "std")]
         debug!(
             "Generating proof for proving update in a Merkle tree of depth {}\n\
             ---------------------",
             MERKLE_TREE_DEPTH
         );
+        #[cfg(feature = "std")]
         let now = Instant::now();
         let trace = build_trace(&self.tx_metadata);
 
-        let trace_length = trace.length();
+        #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
             trace.width(),
-            log2(trace_length),
+            log2(trace.length()),
             now.elapsed().as_millis()
         );
 
@@ -100,6 +138,7 @@ impl TransactionExample {
         winterfell::prove::<TransactionAir>(trace, pub_inputs, self.options.clone()).unwrap()
     }
 
+    /// Verifies a proof of valid state-transition of a set of transactions
     pub fn verify(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs {
             initial_root: self.tx_metadata.initial_roots[0].to_elements(),
@@ -108,12 +147,13 @@ impl TransactionExample {
         winterfell::verify::<TransactionAir>(proof, pub_inputs)
     }
 
-    pub fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
+    #[cfg(test)]
+    fn verify_with_wrong_inputs(&self, proof: StarkProof) -> Result<(), VerifierError> {
         let initial_root = self.tx_metadata.initial_roots[0].to_elements();
         let final_root = self.tx_metadata.final_root.to_elements();
         let pub_inputs = PublicInputs {
             initial_root,
-            final_root: [final_root[0]; RATE_WIDTH],
+            final_root: [final_root[0]; utils::rescue::RATE_WIDTH],
         };
         winterfell::verify::<TransactionAir>(proof, pub_inputs)
     }
@@ -137,6 +177,7 @@ impl TransactionExample {
 /// - `r_paths` : receiver's Merkle path prior each transaction
 /// - `deltas` : amounts to be sent in each transaction
 /// - `signatures` : signatures for each transaction
+#[derive(Clone, Debug)]
 pub struct TransactionMetadata {
     initial_roots: Vec<Hash>,
     final_root: Hash,
@@ -152,6 +193,7 @@ pub struct TransactionMetadata {
 
 impl TransactionMetadata {
     #[allow(clippy::too_many_arguments)]
+    /// Outputs a new `TransactionExample` from the provided transaction metadata.
     pub fn new(
         initial_roots: Vec<Hash>,
         final_root: Hash,
@@ -187,7 +229,9 @@ impl TransactionMetadata {
         }
     }
 
+    /// Builds a `TransactionMetadata` object from a set of `num_transactions` random transactions
     pub fn build_random(num_transactions: usize) -> Self {
+        #[cfg(feature = "std")]
         let now = Instant::now();
 
         let mut rng = OsRng;
@@ -218,6 +262,7 @@ impl TransactionMetadata {
             ]));
         }
         let mut tree = MerkleTree::<Rescue63>::new(leaves.clone()).unwrap();
+        #[cfg(feature = "std")]
         debug!(
             "Built Merkle tree of depth {} in {} ms",
             MERKLE_TREE_DEPTH,
@@ -235,6 +280,7 @@ impl TransactionMetadata {
         let mut r_paths = vec![EMPTY_PATH; num_transactions];
         let mut deltas = vec![BaseElement::ZERO; num_transactions];
 
+        #[cfg(feature = "std")]
         let now = Instant::now();
         // Repeat basic process for every transaction
         for transaction_num in 0..num_transactions {
@@ -318,6 +364,7 @@ impl TransactionMetadata {
             r_paths[transaction_num] = tree.prove(r_index).unwrap();
         }
         let final_root = *tree.root();
+        #[cfg(feature = "std")]
         debug!(
             "Updated Merkle tree with {} transactions to root {} in {} ms",
             num_transactions,
@@ -325,6 +372,7 @@ impl TransactionMetadata {
             now.elapsed().as_millis(),
         );
 
+        #[cfg(feature = "std")]
         let now = Instant::now();
         let mut signatures = Vec::with_capacity(num_transactions);
         for i in 0..num_transactions {
@@ -338,6 +386,7 @@ impl TransactionMetadata {
             signatures.push(schnorr::sign(message, s_secret_keys[i]));
         }
 
+        #[cfg(feature = "std")]
         debug!(
             "Computed {} Schnorr signatures in {} ms",
             num_transactions,

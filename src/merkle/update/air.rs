@@ -1,7 +1,10 @@
-// Copyright (c) ToposWare and its affiliates.
+// Copyright (c) Toposware, Inc. 2021
 //
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
 use super::constants::*;
 use crate::utils::rescue::{self, HASH_CYCLE_MASK};
@@ -11,6 +14,9 @@ use winterfell::{
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
     TransitionConstraintDegree,
 };
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 // MERKLE PATH VERIFICATION AIR
 // ================================================================================================
@@ -173,7 +179,7 @@ impl Air for MerkleAir {
 // HELPER FUNCTIONS
 // ================================================================================================
 
-pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
+pub(crate) fn periodic_columns() -> Vec<Vec<BaseElement>> {
     // Mask for anything that must be applied at the beginning of a transaction
     let mut transaction_setup_mask = vec![BaseElement::ZERO; TRANSACTION_CYCLE_LENGTH];
     transaction_setup_mask[0] = BaseElement::ONE;
@@ -206,7 +212,7 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -282,7 +288,7 @@ pub fn evaluate_constraints<E: FieldElement + From<BaseElement>>(
     }
 }
 
-pub fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
+pub(crate) fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
     result: &mut [E],
     current: &[E],
     next: &[E],
@@ -362,7 +368,9 @@ pub fn evaluate_merkle_update_auth<E: FieldElement + From<BaseElement>>(
     }
 }
 
-pub fn transition_constraint_degrees(cycle_length: usize) -> Vec<TransitionConstraintDegree> {
+pub(crate) fn transition_constraint_degrees(
+    cycle_length: usize,
+) -> Vec<TransitionConstraintDegree> {
     // Constraint degrees for enforcement of Rescue hash rounds
     let mut hash_constraint_degrees =
         vec![TransitionConstraintDegree::with_cycles(3, vec![cycle_length]); HASH_STATE_WIDTH];
