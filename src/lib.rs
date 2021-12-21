@@ -38,6 +38,7 @@ mod constants;
 mod trace;
 pub use trace::build_trace;
 
+#[cfg(feature = "std")]
 use log::debug;
 use rand_core::{OsRng, RngCore};
 use utils::rescue::Hash;
@@ -233,42 +234,13 @@ impl TransactionMetadata {
     pub fn build_random(num_transactions: usize) -> Self {
         #[cfg(feature = "std")]
         let now = Instant::now();
-
         let mut rng = OsRng;
         let tree_size = usize::pow(2, MERKLE_TREE_DEPTH as u32);
         // Ensure values are of appropriate size
         // TODO: Change this and the size bound on delta if RANGE_LOG changes
-        let mut value_elements = Vec::with_capacity(tree_size * 2);
-        let mut secret_keys = Vec::with_capacity(tree_size);
-        let mut values = Vec::with_capacity(tree_size);
-        let mut leaves = Vec::with_capacity(tree_size);
-        for i in 0..tree_size {
-            value_elements.push(rng.next_u64());
-            value_elements.push(rng.next_u64());
-            let skey = Scalar::random(&mut rng);
-            secret_keys.push(skey);
-            let pkey = AffinePoint::from(AffinePoint::generator() * skey);
-            let value1 = BaseElement::from(value_elements[i * 2]);
-            let value2 = BaseElement::from(value_elements[i * 2 + 1]);
-            let mut val = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
-            val[0..POINT_COORDINATE_WIDTH].copy_from_slice(&pkey.get_x());
-            val[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&pkey.get_y());
-            val[AFFINE_POINT_WIDTH] = value1;
-            val[AFFINE_POINT_WIDTH + 1] = value2;
-            values.push(val);
-            leaves.push(Rescue63::merge(&[
-                Hash::new(val[0], val[1], val[2], val[3], val[4], val[5], val[6]),
-                Hash::new(val[7], val[8], val[9], val[10], val[11], val[12], val[13]),
-            ]));
-        }
-        let mut tree = MerkleTree::<Rescue63>::new(leaves.clone()).unwrap();
-        #[cfg(feature = "std")]
-        debug!(
-            "Built Merkle tree of depth {} in {} ms",
-            MERKLE_TREE_DEPTH,
-            now.elapsed().as_millis(),
-        );
-        let mut initial_roots = Vec::new();
+        let mut secret_keys = vec![Scalar::default(); tree_size];
+        let mut values = vec![[BaseElement::ZERO; AFFINE_POINT_WIDTH + 2]; tree_size];
+
         // Initialize the vectors
         let mut s_secret_keys = vec![Scalar::zero(); num_transactions];
         let mut s_old_values = vec![[BaseElement::ZERO; AFFINE_POINT_WIDTH + 2]; num_transactions];
@@ -279,25 +251,110 @@ impl TransactionMetadata {
         let mut s_paths = vec![EMPTY_PATH; num_transactions];
         let mut r_paths = vec![EMPTY_PATH; num_transactions];
         let mut deltas = vec![BaseElement::ZERO; num_transactions];
+        #[cfg(feature = "std")]
+        debug!("Initialized vectors in {} ms", now.elapsed().as_millis(),);
+
+        // Create the empty Merkle tree
+        #[cfg(feature = "std")]
+        let now = Instant::now();
+        let mut tree = MerkleTree::<Rescue63>::build_empty(MERKLE_TREE_DEPTH);
+        #[cfg(feature = "std")]
+        debug!(
+            "Built empty Merkle tree of depth {} in {} ms",
+            MERKLE_TREE_DEPTH,
+            now.elapsed().as_millis(),
+        );
+
+        #[cfg(feature = "std")]
+        let now = Instant::now();
+        // Fill in random sender values in the tree
+        for s_index in s_indices.iter_mut() {
+            // Get a random index to instantiate values for
+            *s_index = rng.next_u64() as usize % tree_size;
+            //s_indices[transaction_num] = s_index;
+            let skey = Scalar::random(&mut rng);
+            secret_keys[*s_index] = skey;
+            let pkey = AffinePoint::from(AffinePoint::generator() * skey);
+            let balance = rng.next_u64();
+            let nonce = rng.next_u64();
+            let mut val = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
+            val[0..POINT_COORDINATE_WIDTH].copy_from_slice(&pkey.get_x());
+            val[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&pkey.get_y());
+            val[AFFINE_POINT_WIDTH] = BaseElement::from(balance);
+            val[AFFINE_POINT_WIDTH + 1] = BaseElement::from(nonce);
+            values[*s_index] = val;
+            let leaf = Rescue63::merge(&[
+                Hash::new(val[0], val[1], val[2], val[3], val[4], val[5], val[6]),
+                Hash::new(val[7], val[8], val[9], val[10], val[11], val[12], val[13]),
+            ]);
+            // Update the tree with the new leaf
+            tree.update_leaf(*s_index, leaf);
+        }
+        #[cfg(feature = "std")]
+        debug!(
+            "Filled in {} sender accounts in {} ms",
+            num_transactions,
+            now.elapsed().as_millis(),
+        );
+
+        #[cfg(feature = "std")]
+        let now = Instant::now();
+        // Fill in random receiver values in the tree
+        //#[cfg(feature = "std")]
+        #[allow(dead_code)]
+        let mut new_accounts = 0;
+        for transaction_num in 0..num_transactions {
+            // Make sure receiver is not the same as sender
+            let mut r_index = rng.next_u64() as usize % tree_size;
+            while s_indices[transaction_num] == r_index {
+                r_index = rng.next_u64() as usize % tree_size;
+            }
+            r_indices[transaction_num] = r_index;
+            // Determine if the receiver has an "account" already
+            if secret_keys[r_index] == Scalar::default() {
+                let skey = Scalar::random(&mut rng);
+                secret_keys[r_index] = skey;
+                let pkey = AffinePoint::from(AffinePoint::generator() * skey);
+                let balance = rng.next_u64();
+                let nonce = rng.next_u64();
+                let mut val = [BaseElement::ZERO; AFFINE_POINT_WIDTH + 2];
+                val[0..POINT_COORDINATE_WIDTH].copy_from_slice(&pkey.get_x());
+                val[POINT_COORDINATE_WIDTH..AFFINE_POINT_WIDTH].copy_from_slice(&pkey.get_y());
+                val[AFFINE_POINT_WIDTH] = BaseElement::from(balance);
+                val[AFFINE_POINT_WIDTH + 1] = BaseElement::from(nonce);
+                values[r_index] = val;
+                let leaf = Rescue63::merge(&[
+                    Hash::new(val[0], val[1], val[2], val[3], val[4], val[5], val[6]),
+                    Hash::new(val[7], val[8], val[9], val[10], val[11], val[12], val[13]),
+                ]);
+                // Update the tree with the new leaf
+                tree.update_leaf(r_index, leaf);
+                new_accounts += 1;
+            }
+        }
+        #[cfg(feature = "std")]
+        debug!(
+            "Selected {} receiver accounts (creating {} new accounts) in {} ms",
+            num_transactions,
+            new_accounts,
+            now.elapsed().as_millis(),
+        );
+
+        let mut initial_roots = Vec::new();
 
         #[cfg(feature = "std")]
         let now = Instant::now();
         // Repeat basic process for every transaction
         for transaction_num in 0..num_transactions {
-            // Get random indices and amount to change the accounts by
-            let s_index = rng.next_u64() as usize % tree_size;
-            // Make sure receiver is not the same as sender
-            let mut r_index = rng.next_u64() as usize % tree_size;
-            while s_index == r_index {
-                r_index = rng.next_u64() as usize % tree_size;
-            }
-
+            // Select the indices for this trancaction
+            let s_index = s_indices[transaction_num];
+            let r_index = r_indices[transaction_num];
             // ensure that delta is small enough to not overflow the receiver's balance
             // or underflow the sender's balance and make the AIR program fail
             let delta_value = rng.next_u64()
                 % core::cmp::min(
-                    values[s_index][2].to_repr(),
-                    u64::MAX - values[r_index][2].to_repr(),
+                    values[s_index][AFFINE_POINT_WIDTH].to_repr(),
+                    u64::MAX - values[r_index][AFFINE_POINT_WIDTH].to_repr(),
                 );
             let delta = BaseElement::from(delta_value);
 
@@ -317,7 +374,7 @@ impl TransactionMetadata {
             values[s_index][AFFINE_POINT_WIDTH] -= delta;
             values[s_index][AFFINE_POINT_WIDTH + 1] += BaseElement::ONE;
             values[r_index][AFFINE_POINT_WIDTH] += delta;
-            leaves[s_index] = Rescue63::merge(&[
+            let s_leaf = Rescue63::merge(&[
                 Hash::new(
                     values[s_index][0],
                     values[s_index][1],
@@ -337,7 +394,7 @@ impl TransactionMetadata {
                     values[s_index][13],
                 ),
             ]);
-            leaves[r_index] = Rescue63::merge(&[
+            let r_leaf = Rescue63::merge(&[
                 Hash::new(
                     values[r_index][0],
                     values[r_index][1],
@@ -357,8 +414,8 @@ impl TransactionMetadata {
                     values[r_index][13],
                 ),
             ]);
-            tree.update_leaf(s_index, leaves[s_index]);
-            tree.update_leaf(r_index, leaves[r_index]);
+            tree.update_leaf(s_index, s_leaf);
+            tree.update_leaf(r_index, r_leaf);
 
             // Compute Merkle path for the leaf specified by the receiver index
             r_paths[transaction_num] = tree.prove(r_index).unwrap();
