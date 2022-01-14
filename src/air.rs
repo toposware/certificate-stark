@@ -197,29 +197,43 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     // Initialize the length of the stitched masks
     let mut length = 0;
     // Add the columns for the pre-Merkle component
-    let pre_merkle_columns = merkle::init::periodic_columns();
+    let mut pre_merkle_columns = merkle::init::periodic_columns();
     stitch(
         &mut columns,
-        pre_merkle_columns,
+        pre_merkle_columns.clone(),
         (ARK_INDEX..ARK_INDEX + HASH_STATE_WIDTH * 2)
             .enumerate()
             .collect(),
     );
+    let mut columns2 = vec![Vec::new(); ARK_INDEX];
+    columns2.append(&mut pre_merkle_columns);
+    assert!(columns2 == columns);
+
     // TODO: Change to make use of modified Merkle init component
     //length += NUM_HASH_ROUNDS;
     pad(&mut columns, vec![SETUP_MASK_INDEX], 1, BaseElement::ONE);
+
+    columns2[SETUP_MASK_INDEX].push(BaseElement::ONE);
+    assert_eq!(columns2, columns);
+
     pad(
         &mut columns,
         vec![VALUE_COPY_MASK_INDEX],
         1,
         BaseElement::ZERO,
     );
+
+    columns2[VALUE_COPY_MASK_INDEX].push(BaseElement::ZERO);
+    assert_eq!(columns2, columns);
+
+    // Since length is 0 this instruction is doing nothing
     pad(
         &mut columns,
         vec![MERKLE_MASK_INDEX, FINISH_MASK_INDEX, HASH_MASK_INDEX],
         length,
         BaseElement::ZERO,
     );
+    assert_eq!(columns2, columns);
 
     // Add the columns for the Merkle component
     let merkle_columns = merkle::update::periodic_columns();
@@ -228,10 +242,14 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         merkle_columns.clone(),
         vec![(2, HASH_INPUT_MASK_INDEX)],
     );
+
+    columns2[HASH_INPUT_MASK_INDEX].append(&mut merkle_columns[2].clone());
+    assert_eq!(columns2, columns);
+
     length = TRANSACTION_HASH_LENGTH;
     fill(
         &mut columns,
-        merkle_columns,
+        merkle_columns.clone(),
         vec![
             (1, MERKLE_MASK_INDEX),
             (3, FINISH_MASK_INDEX),
@@ -239,6 +257,22 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         ],
         length,
     );
+
+    for (merkle_index, columns_index) in vec![(1, MERKLE_MASK_INDEX), (3, FINISH_MASK_INDEX), (4, HASH_MASK_INDEX)]
+    {
+        // It might be a food idea to crate a method for encapsulating the way extra_column is created
+        // something like "repeat_with_offset(column, offset, length)" where offset = columns2[columns_index].len() % merkle_columns[merkle_index].len()
+        // and length columns2[columns_index].len() % merkle_columns[merkle_index].len()
+        let mut extra_column: Vec<_> = merkle_columns[merkle_index].clone()
+        .into_iter()
+        .skip(columns2[columns_index].len() % merkle_columns[merkle_index].len())
+        .cycle()
+        .take(TRANSACTION_HASH_LENGTH - columns2[columns_index].len())
+        .collect();
+        columns2[columns_index].append(&mut extra_column);
+    }
+
+    assert_eq!(columns2, columns);
 
     // Pad the columns up to the transition to Schnorr
     length = MERKLE_UPDATE_LENGTH;
@@ -265,6 +299,27 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         length,
         BaseElement::ZERO,
     );
+
+    let mut indices = vec![
+        SETUP_MASK_INDEX,
+        MERKLE_MASK_INDEX,
+        FINISH_MASK_INDEX,
+        HASH_MASK_INDEX,
+        SCHNORR_MASK_INDEX,
+        SCALAR_MULT_MASK_INDEX,
+        DOUBLING_MASK_INDEX,
+        SCHNORR_HASH_MASK_INDEX,
+        RANGE_PROOF_STEP_MASK_INDEX,
+        RANGE_PROOF_FINISH_MASK_INDEX,
+    ];
+    indices.append(&mut (SCHNORR_DIGEST_MASK_INDEX..SCHNORR_HASH_MASK_INDEX).collect());
+    for index in indices.into_iter()
+    {
+        let delta_length = MERKLE_UPDATE_LENGTH - columns2[index].len();
+        columns2[index].append(&mut vec![BaseElement::ZERO; delta_length])
+    }
+    assert_eq!(columns2, columns);
+
     pad(
         &mut columns,
         vec![VALUE_COPY_MASK_INDEX],
@@ -272,11 +327,15 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         BaseElement::ONE,
     );
 
+    let delta_length = MERKLE_UPDATE_LENGTH - columns2[VALUE_COPY_MASK_INDEX].len();
+    columns2[VALUE_COPY_MASK_INDEX].append(&mut vec![BaseElement::ONE; delta_length]);
+    assert_eq!(columns2, columns);
+
     // Add the columns for the Schnorr component
-    let schnorr_columns = schnorr::periodic_columns();
+    let mut schnorr_columns = schnorr::periodic_columns();
     stitch(
         &mut columns,
-        schnorr_columns,
+        schnorr_columns.clone(),
         vec![
             SCHNORR_MASK_INDEX,
             SCALAR_MULT_MASK_INDEX,
@@ -291,6 +350,23 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         .enumerate()
         .collect(),
     );
+
+    let indices = vec![
+        SCHNORR_MASK_INDEX,
+        SCALAR_MULT_MASK_INDEX,
+        DOUBLING_MASK_INDEX,
+        SCHNORR_DIGEST_MASK_INDEX,
+        SCHNORR_DIGEST_MASK_INDEX + 1,
+        SCHNORR_DIGEST_MASK_INDEX + 2,
+        SCHNORR_DIGEST_MASK_INDEX + 3,
+        SCHNORR_HASH_MASK_INDEX,
+    ];
+    for (index_schnorr, index_columns) in indices.into_iter().enumerate()
+    {
+        columns2[index_columns].append(&mut schnorr_columns[index_schnorr])
+    }
+    assert_eq!(columns2, columns);
+
     // Create columns for the input copy masks
     pad(
         &mut columns,
@@ -298,6 +374,14 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         length,
         BaseElement::ZERO,
     );
+
+    for index in HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX
+    {
+        let delta_length = MERKLE_UPDATE_LENGTH - columns2[index].len();
+        columns2[index].append(&mut vec![BaseElement::ZERO; delta_length])
+    }
+    assert_eq!(columns2, columns);
+
     let mut input_masks = vec![
         vec![BaseElement::ZERO; SIG_CYCLE_LENGTH];
         RANGE_PROOF_STEP_MASK_INDEX - HASH_INTERNAL_INPUT_MASKS_INDEX
@@ -311,24 +395,37 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
     }
     stitch(
         &mut columns,
-        input_masks,
+        input_masks.clone(),
         (HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX)
             .enumerate()
             .collect(),
     );
 
+    columns2[HASH_INTERNAL_INPUT_MASKS_INDEX..RANGE_PROOF_STEP_MASK_INDEX]
+    .iter_mut()
+    .zip(input_masks[.. RANGE_PROOF_STEP_MASK_INDEX - HASH_INTERNAL_INPUT_MASKS_INDEX].into_iter())
+    .for_each(|(column, mask)|{
+        column.append(&mut mask.clone());
+    });
+    assert_eq!(columns2, columns);
+
     // Add the columns for the range proof component
-    let range_proof_mask = vec![BaseElement::ONE; RANGE_LOG];
+    let mut range_proof_mask = vec![BaseElement::ONE; RANGE_LOG];
     let mut range_proof_finish_mask = vec![BaseElement::ZERO; RANGE_LOG];
     range_proof_finish_mask[RANGE_LOG - 1] = BaseElement::ONE;
     stitch(
         &mut columns,
-        vec![range_proof_mask, range_proof_finish_mask],
+        vec![range_proof_mask.clone(), range_proof_finish_mask.clone()],
         vec![RANGE_PROOF_STEP_MASK_INDEX, RANGE_PROOF_FINISH_MASK_INDEX]
             .into_iter()
             .enumerate()
             .collect(),
     );
+
+    columns2[RANGE_PROOF_STEP_MASK_INDEX].append(&mut range_proof_mask);
+    columns2[RANGE_PROOF_FINISH_MASK_INDEX].append(&mut range_proof_finish_mask);
+    assert_eq!(columns2, columns);
+
 
     // Pad out the copy constraints
     let hash_input_length = 3 * HASH_CYCLE_LENGTH - 1;
@@ -343,6 +440,10 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         length,
         BaseElement::ONE,
     );
+
+    let delta_length = length - columns2[VALUE_COPY_MASK_INDEX].len();
+    columns2[VALUE_COPY_MASK_INDEX].append(&mut vec![BaseElement::ONE; delta_length]);
+    assert_eq!(columns2, columns);
 
     // Pad to finish the cycle length
     length = TRANSACTION_CYCLE_LENGTH;
@@ -376,6 +477,29 @@ pub fn periodic_columns() -> Vec<Vec<BaseElement>> {
         length,
         BaseElement::ZERO,
     );
+
+    let mut indices = vec![
+        SETUP_MASK_INDEX,
+        MERKLE_MASK_INDEX,
+        FINISH_MASK_INDEX,
+        HASH_MASK_INDEX,
+        SCHNORR_MASK_INDEX,
+        SCALAR_MULT_MASK_INDEX,
+        DOUBLING_MASK_INDEX,
+        SCHNORR_HASH_MASK_INDEX,
+        RANGE_PROOF_STEP_MASK_INDEX,
+        RANGE_PROOF_FINISH_MASK_INDEX,
+        VALUE_COPY_MASK_INDEX,
+    ];
+    indices.append(&mut (SCHNORR_DIGEST_MASK_INDEX..SCHNORR_HASH_MASK_INDEX).collect());
+    indices.append(&mut (HASH_INTERNAL_INPUT_MASKS_INDEX..HASH_INTERNAL_INPUT_MASKS_INDEX + 3).collect());
+    for index in indices.into_iter()
+    {
+        let delta_length = length - columns2[index].len();
+        columns2[index].append(&mut vec![BaseElement::ZERO; delta_length])
+    }
+    assert_eq!(columns2, columns);
+
     columns
 }
 
