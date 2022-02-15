@@ -8,7 +8,7 @@
 
 use winterfell::{
     math::{fields::f63::BaseElement, FieldElement},
-    FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
+    FieldExtension, HashFunction, ProofOptions, Prover, StarkProof, VerifierError,
 };
 
 #[cfg(feature = "std")]
@@ -16,16 +16,18 @@ use log::debug;
 #[cfg(feature = "std")]
 use std::time::Instant;
 #[cfg(feature = "std")]
-use winterfell::math::log2;
+use winterfell::{math::log2, Trace};
 
 mod air;
 pub(crate) use air::{evaluate_constraints, periodic_columns};
 use air::{PreMerkleAir, PublicInputs};
 
+mod prover;
+use prover::PreMerkleProver;
+
 pub(crate) mod constants;
 use constants::AFFINE_POINT_WIDTH;
 mod trace;
-pub(crate) use trace::build_trace;
 
 #[cfg(test)]
 mod tests;
@@ -84,9 +86,13 @@ impl PreMerkleExample {
             "Generating proof for Pre-Merkle block\n\
             ---------------------"
         );
+
+        let prover = PreMerkleProver::new(self.options.clone());
+
+        // generate the execution trace
         #[cfg(feature = "std")]
         let now = Instant::now();
-        let trace = build_trace(self.s_inputs, self.r_inputs, self.delta);
+        let trace = prover.build_trace(self.s_inputs, self.r_inputs, self.delta);
         #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -96,12 +102,7 @@ impl PreMerkleExample {
         );
 
         // generate the proof
-        let pub_inputs = PublicInputs {
-            s_inputs: self.s_inputs,
-            r_inputs: self.r_inputs,
-            delta: self.delta,
-        };
-        winterfell::prove::<PreMerkleAir>(trace, pub_inputs, self.options.clone()).unwrap()
+        prover.prove(trace).unwrap()
     }
 
     /// Verifies the validity of a proof of correct Rescue-Prime hash iteration

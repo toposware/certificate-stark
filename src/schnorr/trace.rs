@@ -8,45 +8,12 @@
 
 use super::constants::*;
 use super::{ecc, field, rescue};
-use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
+use bitvec::{order::Lsb0, slice::BitSlice};
 use core::cmp::Ordering;
-use winterfell::{
-    math::{curves::curve_f63::Scalar, fields::f63::BaseElement, FieldElement},
-    ExecutionTrace,
-};
+use winterfell::math::{curves::curve_f63::Scalar, fields::f63::BaseElement, FieldElement};
 
 #[cfg(feature = "concurrent")]
 use winterfell::iterators::*;
-
-// TRACE GENERATOR
-// ================================================================================================
-
-pub(crate) fn build_trace(
-    messages: &[[BaseElement; AFFINE_POINT_WIDTH * 2 + 4]],
-    signatures: &[([BaseElement; POINT_COORDINATE_WIDTH], Scalar)],
-) -> ExecutionTrace<BaseElement> {
-    // allocate memory to hold the trace table
-    let trace_length = SIG_CYCLE_LENGTH * messages.len();
-    let mut trace = ExecutionTrace::new(TRACE_WIDTH, trace_length);
-
-    trace.fragments(SIG_CYCLE_LENGTH).for_each(|mut sig_trace| {
-        let i = sig_trace.index();
-        let (pkey_point, s_bytes, h_bytes) = build_sig_info(&messages[i], &signatures[i]);
-        let s_bits = s_bytes.as_bits::<Lsb0>();
-        let h_bits = h_bytes.as_bits::<Lsb0>();
-
-        sig_trace.fill(
-            |state| {
-                init_sig_verification_state(signatures[i], state);
-            },
-            |step, state| {
-                update_sig_verification_state(step, messages[i], pkey_point, s_bits, h_bits, state);
-            },
-        );
-    });
-
-    trace
-}
 
 // TRACE INITIALIZATION
 // ================================================================================================

@@ -68,7 +68,7 @@ pub struct TransactionAir {
 }
 
 impl Air for TransactionAir {
-    type BaseElement = BaseElement;
+    type BaseField = BaseElement;
     type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
@@ -107,11 +107,11 @@ impl Air for TransactionAir {
         }
     }
 
-    fn context(&self) -> &AirContext<Self::BaseElement> {
+    fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
 
-    fn evaluate_transition<E: FieldElement + From<Self::BaseElement>>(
+    fn evaluate_transition<E: FieldElement + From<Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         periodic_values: &[E],
@@ -172,7 +172,7 @@ impl Air for TransactionAir {
         )
     }
 
-    fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
+    fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
         // Assert the presence of the appropriate initial and final tree roots
         let last_step = self.trace_length() - 1;
         vec![
@@ -183,7 +183,7 @@ impl Air for TransactionAir {
         ]
     }
 
-    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
+    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseField>> {
         periodic_columns()
     }
 }

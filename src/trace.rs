@@ -11,12 +11,8 @@ use super::merkle;
 use super::range;
 use super::schnorr;
 use super::utils::rescue;
-use super::TransactionMetadata;
-use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
-use winterfell::{
-    math::{curves::curve_f63::Scalar, fields::f63::BaseElement},
-    ExecutionTrace,
-};
+use bitvec::{order::Lsb0, slice::BitSlice};
+use winterfell::math::{curves::curve_f63::Scalar, fields::f63::BaseElement};
 
 #[cfg(feature = "concurrent")]
 use winterfell::iterators::*;
@@ -28,91 +24,6 @@ use merkle_const::TRANSACTION_CYCLE_LENGTH as MERKLE_UPDATE_LENGTH;
 use schnorr_const::{
     AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH, SIG_CYCLE_LENGTH as SCHNORR_LENGTH,
 };
-
-// TRACE GENERATOR
-// ================================================================================================
-
-/// Builds the execution trace of the main state transition AIR program.
-// The trace is composed as follows:
-// (note that sigma here refers to sender_balance - delta)
-//
-// | 4 * HASH_STATE + 2 + HASH_RATE |      2 * AFF_POINT + 3      | number of registers
-// |          merkle::init          | copy_keys_delta_sigma_nonce | sub-programs
-// |         merkle::update         | copy_keys_delta_sigma_nonce |
-// |         schnorr::init          | copy_keys_delta_sigma_nonce |
-// |         schnorr::verif         | range_proof_delta_and_sigma |
-#[allow(clippy::too_many_arguments)]
-pub fn build_trace(tx_metadata: &TransactionMetadata) -> ExecutionTrace<BaseElement> {
-    let initial_roots = &tx_metadata.initial_roots;
-    let s_old_values = &tx_metadata.s_old_values;
-    let r_old_values = &tx_metadata.r_old_values;
-    let s_indices = &tx_metadata.s_indices;
-    let r_indices = &tx_metadata.r_indices;
-    let s_paths = &tx_metadata.s_paths;
-    let r_paths = &tx_metadata.r_paths;
-    let deltas = &tx_metadata.deltas;
-    let signatures = &tx_metadata.signatures;
-
-    let num_transactions = tx_metadata.initial_roots.len();
-
-    // allocate memory to hold the trace table
-    let mut trace = ExecutionTrace::new(TRACE_WIDTH, num_transactions * TRANSACTION_CYCLE_LENGTH);
-
-    trace
-        .fragments(TRANSACTION_CYCLE_LENGTH)
-        .for_each(|mut transaction_trace| {
-            let i = transaction_trace.index();
-
-            let delta_bytes = deltas[i].to_bytes();
-            let delta_bits = delta_bytes.as_bits::<Lsb0>();
-
-            let sigma_bytes = (s_old_values[i][AFFINE_POINT_WIDTH] - deltas[i]).to_bytes();
-            let sigma_bits = sigma_bytes.as_bits::<Lsb0>();
-
-            let message = super::build_tx_message(
-                &s_old_values[i][0..AFFINE_POINT_WIDTH],
-                &r_old_values[i][0..AFFINE_POINT_WIDTH],
-                deltas[i],
-                s_old_values[i][AFFINE_POINT_WIDTH + 1],
-            );
-
-            let (pkey_point, sig_bytes, sig_hash_bytes) =
-                schnorr::build_sig_info(&message, &signatures[i]);
-            let sig_bits = sig_bytes.as_bits::<Lsb0>();
-            let sig_hash_bits = sig_hash_bytes.as_bits::<Lsb0>();
-
-            transaction_trace.fill(
-                |state| {
-                    init_transaction_state(
-                        initial_roots[i],
-                        s_old_values[i],
-                        r_old_values[i],
-                        deltas[i],
-                        state,
-                    );
-                },
-                |step, state| {
-                    update_transaction_state(
-                        step,
-                        s_indices[i],
-                        r_indices[i],
-                        s_paths[i].clone(),
-                        r_paths[i].clone(),
-                        delta_bits,
-                        sigma_bits,
-                        signatures[i],
-                        sig_bits,
-                        sig_hash_bits,
-                        message,
-                        pkey_point,
-                        state,
-                    );
-                },
-            )
-        });
-
-    trace
-}
 
 // TRACE INITIALIZATION
 // ================================================================================================

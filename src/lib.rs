@@ -33,10 +33,12 @@ use utils::rescue::Rescue63;
 mod air;
 use air::{PublicInputs, TransactionAir};
 
+mod prover;
+use prover::TransactionProver;
+
 mod constants;
 
 mod trace;
-pub use trace::build_trace;
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -49,7 +51,7 @@ use winterfell::{
         fields::f63::BaseElement,
         FieldElement, StarkField,
     },
-    FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
+    FieldExtension, HashFunction, ProofOptions, Prover, StarkProof, VerifierError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -58,7 +60,7 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::time::Instant;
 #[cfg(feature = "std")]
-use winterfell::{crypto::Digest, math::log2};
+use winterfell::{crypto::Digest, math::log2, Trace};
 
 use constants::merkle_const::MERKLE_TREE_DEPTH;
 use constants::schnorr_const::{AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH};
@@ -119,10 +121,13 @@ impl TransactionExample {
             ---------------------",
             MERKLE_TREE_DEPTH
         );
+
+        let prover = TransactionProver::new(self.options.clone());
+
+        // generate the execution trace
         #[cfg(feature = "std")]
         let now = Instant::now();
-        let trace = build_trace(&self.tx_metadata);
-
+        let trace = prover.build_trace(&self.tx_metadata);
         #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -132,11 +137,7 @@ impl TransactionExample {
         );
 
         // generate the proof
-        let pub_inputs = PublicInputs {
-            initial_root: self.tx_metadata.initial_roots[0].to_elements(),
-            final_root: self.tx_metadata.final_root.to_elements(),
-        };
-        winterfell::prove::<TransactionAir>(trace, pub_inputs, self.options.clone()).unwrap()
+        prover.prove(trace).unwrap()
     }
 
     /// Verifies a proof of valid state-transition of a set of transactions
@@ -169,10 +170,10 @@ impl TransactionExample {
 /// - `initial_roots`: intermediate Merkle tree roots prior each transaction
 /// - `final_root`: final Merkle tree root after applying all transactions
 /// - `s_old_values`: sender leaves prior each transaction. Each tree leaf represents:
-///   - the account public key's x affine coordinate
-///   - the account public key's y affine coordinate
-///   - the account balance
-///   - the account nonce
+/// - the account public key's x affine coordinate
+/// - the account public key's y affine coordinate
+/// - the account balance
+/// - the account nonce
 /// - `r_old_values` : receiver leaves prior each transaction
 /// - `s_paths` : sender's Merkle path prior each transaction
 /// - `r_paths` : receiver's Merkle path prior each transaction

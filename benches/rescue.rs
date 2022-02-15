@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 use winterfell::{
     crypto::Hasher,
     math::{fields::f63::BaseElement, log2, FieldElement},
-    Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ExecutionTrace, FieldExtension,
-    HashFunction, ProofOptions, Serializable, StarkProof, TraceInfo, TransitionConstraintDegree,
-    VerifierError,
+    Air, AirContext, Assertion, ByteWriter, EvaluationFrame, FieldExtension, HashFunction,
+    ProofOptions, Serializable, StarkProof, Trace, TraceInfo, TraceTable,
+    TransitionConstraintDegree, VerifierError,
 };
 
 use certificate_stark::utils::rescue::{HASH_CYCLE_LENGTH, NUM_HASH_ROUNDS, RATE_WIDTH};
@@ -164,7 +164,7 @@ pub struct RescueAir {
 }
 
 impl Air for RescueAir {
-    type BaseElement = BaseElement;
+    type BaseField = BaseElement;
     type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
@@ -194,11 +194,11 @@ impl Air for RescueAir {
         }
     }
 
-    fn context(&self) -> &AirContext<Self::BaseElement> {
+    fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
 
-    fn evaluate_transition<E: FieldElement + From<Self::BaseElement>>(
+    fn evaluate_transition<E: FieldElement + From<Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         periodic_values: &[E],
@@ -223,7 +223,7 @@ impl Air for RescueAir {
         enforce_hash_copy(result, current, next, copy_flag);
     }
 
-    fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
+    fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
         // Assert starting and ending values of the hash chain
         let last_step = self.trace_length() - 1;
         vec![
@@ -244,7 +244,7 @@ impl Air for RescueAir {
         ]
     }
 
-    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
+    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseField>> {
         let mut result = vec![CYCLE_MASK.to_vec()];
         result.append(&mut rescue::get_round_constants());
         result
@@ -271,10 +271,10 @@ fn enforce_hash_copy<E: FieldElement>(result: &mut [E], current: &[E], next: &[E
 // RESCUE TRACE GENERATOR
 // ================================================================================================
 
-fn build_trace(seed: [BaseElement; RATE_WIDTH], iterations: usize) -> ExecutionTrace<BaseElement> {
+fn build_trace(seed: [BaseElement; RATE_WIDTH], iterations: usize) -> TraceTable<BaseElement> {
     // allocate memory to hold the trace table
     let trace_length = iterations * HASH_CYCLE_LENGTH;
-    let mut trace = ExecutionTrace::new(TRACE_WIDTH, trace_length);
+    let mut trace = TraceTable::new(TRACE_WIDTH, trace_length);
 
     trace.fill(
         |state| {

@@ -44,7 +44,7 @@ pub struct PreMerkleAir {
 }
 
 impl Air for PreMerkleAir {
-    type BaseElement = BaseElement;
+    type BaseField = BaseElement;
     type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
@@ -61,11 +61,11 @@ impl Air for PreMerkleAir {
         }
     }
 
-    fn context(&self) -> &AirContext<Self::BaseElement> {
+    fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
 
-    fn evaluate_transition<E: FieldElement + From<Self::BaseElement>>(
+    fn evaluate_transition<E: FieldElement + From<Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         periodic_values: &[E],
@@ -83,7 +83,7 @@ impl Air for PreMerkleAir {
         evaluate_constraints(result, current, next, ark, FieldElement::ONE);
     }
 
-    fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
+    fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
         let mut assertions = vec![];
         //check initial sender values against public inputs
         for i in 0..AFFINE_POINT_WIDTH + 2 {
@@ -144,7 +144,7 @@ impl Air for PreMerkleAir {
         assertions
     }
 
-    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
+    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseField>> {
         periodic_columns()
     }
 }

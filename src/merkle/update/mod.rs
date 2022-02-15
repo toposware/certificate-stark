@@ -7,22 +7,25 @@
 // except according to those terms.
 
 use crate::TransactionMetadata;
-use winterfell::{FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError};
+use winterfell::{FieldExtension, HashFunction, ProofOptions, Prover, StarkProof, VerifierError};
 
 #[cfg(feature = "std")]
 use log::debug;
 #[cfg(feature = "std")]
 use std::time::Instant;
 #[cfg(feature = "std")]
-use winterfell::math::log2;
+use winterfell::{math::log2, Trace};
 
 pub(crate) mod constants;
 use constants::MERKLE_TREE_DEPTH;
 
 mod trace;
 
-pub(crate) use trace::{build_trace, init_merkle_update_state, update_merkle_update_state};
+pub(crate) use trace::{init_merkle_update_state, update_merkle_update_state};
 mod air;
+
+mod prover;
+use prover::MerkleProver;
 
 pub(crate) use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{MerkleAir, PublicInputs};
@@ -83,9 +86,13 @@ impl TransactionExample {
             ---------------------",
             MERKLE_TREE_DEPTH
         );
+
+        let prover = MerkleProver::new(self.options.clone());
+
+        // generate the execution trace
         #[cfg(feature = "std")]
         let now = Instant::now();
-        let trace = build_trace(&self.tx_metadata);
+        let trace = prover.build_trace(&self.tx_metadata);
         #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -95,11 +102,7 @@ impl TransactionExample {
         );
 
         // generate the proof
-        let pub_inputs = PublicInputs {
-            initial_root: self.tx_metadata.initial_roots[0].to_elements(),
-            final_root: self.tx_metadata.final_root.to_elements(),
-        };
-        winterfell::prove::<MerkleAir>(trace, pub_inputs, self.options.clone()).unwrap()
+        prover.prove(trace).unwrap()
     }
 
     /// Verifies the validity of a proof of correct authentication paths computation
