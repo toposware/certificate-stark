@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use winterfell::{
-    math::fields::f63::BaseElement, FieldExtension, HashFunction, ProofOptions, StarkProof,
+    math::fields::f63::BaseElement, FieldExtension, HashFunction, ProofOptions, Prover, StarkProof,
     VerifierError,
 };
 
@@ -16,13 +16,17 @@ use log::debug;
 #[cfg(feature = "std")]
 use std::time::Instant;
 #[cfg(feature = "std")]
-use winterfell::math::log2;
+use winterfell::{math::log2, Trace};
 
 use super::utils::field;
 
 mod air;
-pub(crate) use air::{build_trace, init_range_verification_state, update_range_verification_state};
 use air::{PublicInputs, RangeProofAir};
+
+mod prover;
+pub(crate) use prover::{
+    init_range_verification_state, update_range_verification_state, RangeProver,
+};
 
 #[cfg(test)]
 mod tests;
@@ -76,9 +80,13 @@ impl RangeProofExample {
             ---------------------",
             self.range_log,
         );
+
+        let prover = RangeProver::new(self.options.clone());
+
+        // generate the execution trace
         #[cfg(feature = "std")]
         let now = Instant::now();
-        let trace = build_trace(self.number, self.range_log);
+        let trace = prover.build_trace(self.number, self.range_log);
         #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -88,10 +96,7 @@ impl RangeProofExample {
         );
 
         // generate the proof
-        let pub_inputs = PublicInputs {
-            number: self.number,
-        };
-        winterfell::prove::<RangeProofAir>(trace, pub_inputs, self.options.clone()).unwrap()
+        prover.prove(trace).unwrap()
     }
 
     /// Verifies the validity of a proof of correct range of a given number

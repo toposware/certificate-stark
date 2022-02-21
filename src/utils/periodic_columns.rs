@@ -52,7 +52,7 @@ use alloc::vec::Vec;
 /// );
 /// ```
 pub(crate) fn stitch(
-    original_columns: &mut Vec<Vec<BaseElement>>,
+    original_columns: &mut [Vec<BaseElement>],
     additional_columns: Vec<Vec<BaseElement>>,
     index_map: Vec<(usize, usize)>,
 ) {
@@ -122,7 +122,7 @@ pub(crate) fn stitch(
 /// );
 /// ```
 pub(crate) fn fill(
-    original_columns: &mut Vec<Vec<BaseElement>>,
+    original_columns: &mut [Vec<BaseElement>],
     additional_columns: Vec<Vec<BaseElement>>,
     index_map: Vec<(usize, usize)>,
     length: usize,
@@ -187,7 +187,7 @@ pub(crate) fn fill(
 /// );
 /// ```
 pub(crate) fn pad(
-    original_columns: &mut Vec<Vec<BaseElement>>,
+    original_columns: &mut [Vec<BaseElement>],
     indices: Vec<usize>,
     length: usize,
     pad_element: BaseElement,

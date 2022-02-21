@@ -40,7 +40,7 @@ pub struct MerkleAir {
 }
 
 impl Air for MerkleAir {
-    type BaseElement = BaseElement;
+    type BaseField = BaseElement;
     type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
@@ -56,11 +56,11 @@ impl Air for MerkleAir {
         }
     }
 
-    fn context(&self) -> &AirContext<Self::BaseElement> {
+    fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
 
-    fn evaluate_transition<E: FieldElement + From<Self::BaseElement>>(
+    fn evaluate_transition<E: FieldElement + From<Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         periodic_values: &[E],
@@ -145,7 +145,7 @@ impl Air for MerkleAir {
         );
     }
 
-    fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
+    fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
         // assert that Merkle path resolves to the tree root, and that hash capacity
         // registers are reset to ZERO every 8 steps
         // Now we must also resolve to the new root and the next registers are also
@@ -171,7 +171,7 @@ impl Air for MerkleAir {
         vec
     }
 
-    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
+    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseField>> {
         periodic_columns()
     }
 }

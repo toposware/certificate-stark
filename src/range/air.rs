@@ -7,11 +7,10 @@
 // except according to those terms.
 
 use super::field;
-use bitvec::{order::Lsb0, slice::BitSlice, view::AsBits};
 use winterfell::{
     math::{fields::f63::BaseElement, FieldElement},
-    Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ExecutionTrace, ProofOptions,
-    Serializable, TraceInfo, TransitionConstraintDegree,
+    Air, AirContext, Assertion, ByteWriter, EvaluationFrame, ProofOptions, Serializable, TraceInfo,
+    TransitionConstraintDegree,
 };
 
 #[cfg(not(feature = "std"))]
@@ -42,7 +41,7 @@ pub struct RangeProofAir {
 }
 
 impl Air for RangeProofAir {
-    type BaseElement = BaseElement;
+    type BaseField = BaseElement;
     type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
@@ -56,11 +55,11 @@ impl Air for RangeProofAir {
         }
     }
 
-    fn context(&self) -> &AirContext<Self::BaseElement> {
+    fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
 
-    fn evaluate_transition<E: FieldElement + From<Self::BaseElement>>(
+    fn evaluate_transition<E: FieldElement + From<Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         _periodic_values: &[E],
@@ -76,7 +75,7 @@ impl Air for RangeProofAir {
         evaluate_constraints(result, current, next);
     }
 
-    fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
+    fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
         // Assert starting and ending values
         vec![
             // Starting values (see initialization in build_trace())
@@ -103,52 +102,4 @@ pub(crate) fn transition_constraint_degrees() -> Vec<TransitionConstraintDegree>
         TransitionConstraintDegree::new(2),
         TransitionConstraintDegree::new(1),
     ]
-}
-
-// TRACE BUILDER
-// ------------------------------------------------------------------------------------------------
-
-pub(crate) fn build_trace(number: BaseElement, range_log: usize) -> ExecutionTrace<BaseElement> {
-    // allocate memory to hold the trace table
-    let trace_length = range_log;
-    let mut trace = ExecutionTrace::new(TRACE_WIDTH, trace_length);
-
-    let number_bytes = number.to_bytes();
-    let number_bits = number_bytes.as_bits::<Lsb0>();
-
-    trace.fill(
-        |state| {
-            init_range_verification_state(state);
-        },
-        |step, state| {
-            // execute the transition function for all steps
-            update_range_verification_state(step, range_log - 1, number_bits, state);
-        },
-    );
-
-    trace
-}
-
-// TRACE INITIALIZATION
-// ================================================================================================
-
-pub(crate) fn init_range_verification_state(state: &mut [BaseElement]) {
-    // initialize first state of the computation
-    state[0] = BaseElement::ZERO; // bit
-    state[1] = BaseElement::ZERO; // accumulated value
-}
-
-// TRACE TRANSITION FUNCTION
-// ================================================================================================
-
-pub(crate) fn update_range_verification_state(
-    step: usize,
-    range_log: usize,
-    bits: &BitSlice<Lsb0, u8>,
-    state: &mut [BaseElement],
-) {
-    if step < range_log {
-        state[0] = BaseElement::from(bits[range_log - 1 - step] as u8);
-        field::apply_double_and_add_step(state, 1, 0);
-    }
 }

@@ -7,37 +7,9 @@
 // except according to those terms.
 
 use super::constants::*;
-use winterfell::{
-    math::{fields::f63::BaseElement, FieldElement},
-    ExecutionTrace,
-};
+use winterfell::math::{fields::f63::BaseElement, FieldElement};
 
 use crate::utils::rescue;
-
-// TRACE BUILDER
-// ------------------------------------------------------------------------------------------------
-
-pub(crate) fn build_trace(
-    s_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
-    r_inputs: [BaseElement; AFFINE_POINT_WIDTH + 2],
-    delta: BaseElement,
-) -> ExecutionTrace<BaseElement> {
-    // allocate memory to hold the trace table
-    let mut trace = ExecutionTrace::new(TRACE_WIDTH, TRANSACTION_CYCLE_LENGTH);
-
-    trace.fill(
-        |state| {
-            // initialize first state of the computation
-            init_merkle_initialization_state(state, s_inputs, r_inputs, delta);
-        },
-        |step, state| {
-            // execute the transition function for all steps
-            update_merkle_initialization_state(step, state);
-        },
-    );
-
-    trace
-}
 
 // TRACE INITIALIZATION
 // ================================================================================================

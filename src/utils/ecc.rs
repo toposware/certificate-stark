@@ -405,44 +405,35 @@ fn compute_add_mixed<E: FieldElement + From<BaseElement>>(state: &mut [E], point
 
 #[inline(always)]
 pub(crate) fn square_fp2<E: FieldElement + From<BaseElement>>(a: &[E]) -> [E; 2] {
-    let self_c0 = a[0];
-    let self_c1 = a[1];
+    let aa = a[0].square();
+    let bb = a[1].square();
 
-    let aa = self_c0.square();
-    let bb = self_c1.square();
+    let tmp = a[0].sub(a[1]);
+    let tmp = tmp.square();
 
-    let tmp = self_c0.sub(self_c1);
-    let tmp = (&tmp).square();
+    let c0 = bb.double();
+    let c0 = c0.add(aa);
 
-    let c0 = (&bb).double();
-    let c0 = (&c0).add(aa);
-
-    let c1 = (&bb).add(c0);
-    let c1 = (&c1).sub(tmp);
+    let c1 = bb.add(c0);
+    let c1 = c1.sub(tmp);
 
     [c0, c1]
 }
 
 #[inline(always)]
 pub(crate) fn mul_fp2<E: FieldElement + From<BaseElement>>(a: &[E], b: &[E]) -> [E; 2] {
-    let self_c0 = a[0];
-    let self_c1 = a[1];
+    let aa = a[0].mul(b[0]);
+    let bb = a[1].mul(b[1]);
 
-    let other_c0 = b[0];
-    let other_c1 = b[1];
+    let tmp = a[0].sub(a[1]);
+    let tmp2 = b[1].sub(b[0]);
+    let tmp = tmp.mul(tmp2);
 
-    let aa = (&self_c0).mul(other_c0);
-    let bb = (&self_c1).mul(other_c1);
+    let c0 = bb.double();
+    let c0 = c0.add(aa);
 
-    let tmp = self_c0.sub(self_c1);
-    let tmp2 = other_c1.sub(other_c0);
-    let tmp = (&tmp).mul(tmp2);
-
-    let c0 = (&bb).double();
-    let c0 = (&c0).add(aa);
-
-    let c1 = (&bb).add(c0);
-    let c1 = (&c1).add(tmp);
+    let c1 = bb.add(c0);
+    let c1 = c1.add(tmp);
 
     [c0, c1]
 }

@@ -15,7 +15,7 @@ use winterfell::{
         fields::f63::BaseElement,
         FieldElement,
     },
-    FieldExtension, HashFunction, ProofOptions, StarkProof, VerifierError,
+    FieldExtension, HashFunction, ProofOptions, Prover, StarkProof, VerifierError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -26,7 +26,7 @@ use log::debug;
 #[cfg(feature = "std")]
 use std::time::Instant;
 #[cfg(feature = "std")]
-use winterfell::math::log2;
+use winterfell::{math::log2, Trace};
 
 use super::utils::{
     ecc::{self, AFFINE_POINT_WIDTH, POINT_COORDINATE_WIDTH},
@@ -37,12 +37,15 @@ use super::utils::{
 pub(crate) mod constants;
 mod trace;
 pub(crate) use trace::{
-    build_sig_info, build_trace, init_sig_verification_state, update_sig_verification_state,
+    build_sig_info, init_sig_verification_state, update_sig_verification_state,
 };
 
 mod air;
 pub(crate) use air::{evaluate_constraints, periodic_columns, transition_constraint_degrees};
 use air::{PublicInputs, SchnorrAir};
+
+mod prover;
+pub(crate) use prover::SchnorrProver;
 
 #[cfg(test)]
 mod tests;
@@ -145,9 +148,17 @@ impl SchnorrExample {
             ---------------------",
             self.messages.len(),
         );
+
+        let prover = SchnorrProver::new(
+            self.options.clone(),
+            self.messages.clone(),
+            self.signatures.clone(),
+        );
+
+        // generate the execution trace
         #[cfg(feature = "std")]
         let now = Instant::now();
-        let trace = build_trace(&self.messages, &self.signatures);
+        let trace = prover.build_trace();
         #[cfg(feature = "std")]
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -157,11 +168,7 @@ impl SchnorrExample {
         );
 
         // generate the proof
-        let pub_inputs = PublicInputs {
-            messages: self.messages.clone(),
-            signatures: self.signatures.clone(),
-        };
-        winterfell::prove::<SchnorrAir>(trace, pub_inputs, self.options.clone()).unwrap()
+        prover.prove(trace).unwrap()
     }
 
     /// Verifies the validity of a proof of correct Schnorr signature verification

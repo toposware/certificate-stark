@@ -45,7 +45,7 @@ pub struct SchnorrAir {
 }
 
 impl Air for SchnorrAir {
-    type BaseElement = BaseElement;
+    type BaseField = BaseElement;
     type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
@@ -60,11 +60,11 @@ impl Air for SchnorrAir {
         }
     }
 
-    fn context(&self) -> &AirContext<Self::BaseElement> {
+    fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
     }
 
-    fn evaluate_transition<E: FieldElement + From<Self::BaseElement>>(
+    fn evaluate_transition<E: FieldElement + From<Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         periodic_values: &[E],
@@ -108,7 +108,7 @@ impl Air for SchnorrAir {
         );
     }
 
-    fn get_assertions(&self) -> Vec<Assertion<Self::BaseElement>> {
+    fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
         let signatures = transpose_signatures(&self.signatures);
         // Assert starting and ending values
         let mut assertions = vec![];
@@ -226,7 +226,7 @@ impl Air for SchnorrAir {
         assertions
     }
 
-    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseElement>> {
+    fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseField>> {
         // Start with empty periodic columns
         let mut columns = vec![Vec::new(); POINT_COORDINATE_WIDTH + PROJECTIVE_POINT_WIDTH + 3];
         // Stitch in the periodic columns applicable to all uses of Schnorr
