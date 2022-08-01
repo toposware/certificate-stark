@@ -12,9 +12,6 @@ use bitvec::{order::Lsb0, slice::BitSlice};
 use core::cmp::Ordering;
 use winterfell::math::{curves::curve_f63::Scalar, fields::f63::BaseElement, FieldElement};
 
-#[cfg(feature = "concurrent")]
-use winterfell::iterators::*;
-
 // TRACE INITIALIZATION
 // ================================================================================================
 

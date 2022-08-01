@@ -5,6 +5,9 @@ use winterfell::{
     ProofOptions, Prover, TraceTable,
 };
 
+#[cfg(feature = "concurrent")]
+use winterfell::iterators::*;
+
 use super::trace::*;
 use super::PublicInputs;
 use super::SchnorrAir;

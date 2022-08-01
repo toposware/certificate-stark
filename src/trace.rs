@@ -14,9 +14,6 @@ use super::utils::rescue;
 use bitvec::{order::Lsb0, slice::BitSlice};
 use winterfell::math::{curves::curve_f63::Scalar, fields::f63::BaseElement};
 
-#[cfg(feature = "concurrent")]
-use winterfell::iterators::*;
-
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 

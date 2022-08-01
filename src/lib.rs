@@ -301,8 +301,6 @@ impl TransactionMetadata {
         #[cfg(feature = "std")]
         let now = Instant::now();
         // Fill in random receiver values in the tree
-        //#[cfg(feature = "std")]
-        #[allow(dead_code)]
         let mut new_accounts = 0;
         for transaction_num in 0..num_transactions {
             // Make sure receiver is not the same as sender

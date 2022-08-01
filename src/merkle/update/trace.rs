@@ -10,9 +10,6 @@ use super::constants::*;
 use crate::utils::rescue::{self, RATE_WIDTH};
 use winterfell::math::{fields::f63::BaseElement, FieldElement};
 
-#[cfg(feature = "concurrent")]
-use winterfell::iterators::*;
-
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 

@@ -1,6 +1,9 @@
 use bitvec::{order::Lsb0, view::AsBits};
 use winterfell::{math::fields::f63::BaseElement, ProofOptions, Prover, Trace, TraceTable};
 
+#[cfg(feature = "concurrent")]
+use winterfell::iterators::*;
+
 use super::constants::*;
 use super::schnorr;
 use super::trace::*;

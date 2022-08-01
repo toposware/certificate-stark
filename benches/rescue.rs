@@ -13,7 +13,7 @@ use winterfell::{
     crypto::Hasher,
     math::{fields::f63::BaseElement, log2, FieldElement},
     Air, AirContext, Assertion, ByteWriter, EvaluationFrame, FieldExtension, HashFunction,
-    ProofOptions, Serializable, StarkProof, Trace, TraceInfo, TraceTable,
+    ProofOptions, Prover, Serializable, StarkProof, Trace, TraceInfo, TraceTable,
     TransitionConstraintDegree, VerifierError,
 };
 
@@ -69,8 +69,10 @@ impl RescueExample {
             ---------------------",
             self.chain_length
         );
+        let prover = RescueProver::new(self.options.clone());
+
         let now = Instant::now();
-        let trace = build_trace(self.seed, self.chain_length);
+        let trace = prover.build_trace(self.seed, self.chain_length);
         let trace_length = trace.length();
         debug!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms",
@@ -79,12 +81,7 @@ impl RescueExample {
             now.elapsed().as_millis()
         );
 
-        // generate the proof
-        let pub_inputs = PublicInputs {
-            seed: self.seed,
-            result: self.result,
-        };
-        winterfell::prove::<RescueAir>(trace, pub_inputs, self.options.clone()).unwrap()
+        prover.prove(trace).unwrap()
     }
 
     fn verify(&self, proof: StarkProof) -> Result<(), VerifierError> {
@@ -268,37 +265,37 @@ fn enforce_hash_copy<E: FieldElement>(result: &mut [E], current: &[E], next: &[E
     }
 }
 
-// RESCUE TRACE GENERATOR
+// RESCUE PROVER
 // ================================================================================================
 
-fn build_trace(seed: [BaseElement; RATE_WIDTH], iterations: usize) -> TraceTable<BaseElement> {
-    // allocate memory to hold the trace table
-    let trace_length = iterations * HASH_CYCLE_LENGTH;
-    let mut trace = TraceTable::new(TRACE_WIDTH, trace_length);
+pub struct RescueProver {
+    options: ProofOptions,
+}
 
-    trace.fill(
-        |state| {
-            // initialize first state of the computation
-            state[0] = seed[0];
-            state[1] = seed[1];
-            state[2] = seed[2];
-            state[3] = seed[3];
-            state[4] = seed[4];
-            state[5] = seed[5];
-            state[6] = seed[6];
-            state[7] = BaseElement::ZERO;
-            state[8] = BaseElement::ZERO;
-            state[9] = BaseElement::ZERO;
-            state[10] = BaseElement::ZERO;
-            state[11] = BaseElement::ZERO;
-            state[12] = BaseElement::ZERO;
-            state[13] = BaseElement::ZERO;
-        },
-        |step, state| {
-            // execute the transition function for all steps
-            if (step % HASH_CYCLE_LENGTH) < NUM_HASH_ROUNDS {
-                rescue::apply_round(state, step);
-            } else {
+impl RescueProver {
+    pub fn new(options: ProofOptions) -> Self {
+        Self { options }
+    }
+
+    pub fn build_trace(
+        &self,
+        seed: [BaseElement; RATE_WIDTH],
+        iterations: usize,
+    ) -> TraceTable<BaseElement> {
+        // allocate memory to hold the trace table
+        let trace_length = iterations * HASH_CYCLE_LENGTH;
+        let mut trace = TraceTable::new(TRACE_WIDTH, trace_length);
+
+        trace.fill(
+            |state| {
+                // initialize first state of the computation
+                state[0] = seed[0];
+                state[1] = seed[1];
+                state[2] = seed[2];
+                state[3] = seed[3];
+                state[4] = seed[4];
+                state[5] = seed[5];
+                state[6] = seed[6];
                 state[7] = BaseElement::ZERO;
                 state[8] = BaseElement::ZERO;
                 state[9] = BaseElement::ZERO;
@@ -306,11 +303,60 @@ fn build_trace(seed: [BaseElement; RATE_WIDTH], iterations: usize) -> TraceTable
                 state[11] = BaseElement::ZERO;
                 state[12] = BaseElement::ZERO;
                 state[13] = BaseElement::ZERO;
-            }
-        },
-    );
+            },
+            |step, state| {
+                // execute the transition function for all steps
+                if (step % HASH_CYCLE_LENGTH) < NUM_HASH_ROUNDS {
+                    rescue::apply_round(state, step);
+                } else {
+                    state[7] = BaseElement::ZERO;
+                    state[8] = BaseElement::ZERO;
+                    state[9] = BaseElement::ZERO;
+                    state[10] = BaseElement::ZERO;
+                    state[11] = BaseElement::ZERO;
+                    state[12] = BaseElement::ZERO;
+                    state[13] = BaseElement::ZERO;
+                }
+            },
+        );
 
-    trace
+        trace
+    }
+}
+
+impl Prover for RescueProver {
+    type BaseField = BaseElement;
+    type Air = RescueAir;
+    type Trace = TraceTable<BaseElement>;
+
+    fn get_pub_inputs(&self, trace: &Self::Trace) -> PublicInputs {
+        let last_step = trace.length() - 1;
+
+        PublicInputs {
+            seed: [
+                trace.get(0, 0),
+                trace.get(1, 0),
+                trace.get(2, 0),
+                trace.get(3, 0),
+                trace.get(4, 0),
+                trace.get(5, 0),
+                trace.get(6, 0),
+            ],
+            result: [
+                trace.get(0, last_step),
+                trace.get(1, last_step),
+                trace.get(2, last_step),
+                trace.get(3, last_step),
+                trace.get(4, last_step),
+                trace.get(5, last_step),
+                trace.get(6, last_step),
+            ],
+        }
+    }
+
+    fn options(&self) -> &ProofOptions {
+        &self.options
+    }
 }
 
 // RESCUE BENCHMARK
